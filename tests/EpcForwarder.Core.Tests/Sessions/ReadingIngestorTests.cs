@@ -1,4 +1,5 @@
 // tests/EpcForwarder.Core.Tests/Sessions/ReadingIngestorTests.cs
+using EpcForwarder.Core.Abstractions;
 using EpcForwarder.Core.Epc;
 using EpcForwarder.Core.Sessions;
 using EpcForwarder.Core.Tests.Fakes;
@@ -48,5 +49,23 @@ public class ReadingIngestorTests
         sut.Ingest(id, "FREEFORM-EPC", "devA", clock.UtcNow, resolveSku: false);
 
         Assert.Null(readings.List(id).Single().SearchKey);
+    }
+
+    [Fact]
+    public void Ingest_WithLocation_StoresLocationOnEntry()
+    {
+        var sessions = new InMemorySessionStore();
+        var readings = new InMemoryReadingStore();
+        var clock = new FixedClock(DateTimeOffset.UnixEpoch);
+        var id = Guid.NewGuid();
+        sessions.Save(new Session(id, 1, SessionType.Inventory, "INV-1", clock.UtcNow));
+
+        var ingestor = new ReadingIngestor(sessions, readings, clock);
+        var loc = new ReadLocation("TOKYO-DC", "2F", "A-01");
+
+        ingestor.Ingest(id, "302DB42318A0038000001231", "devA", clock.UtcNow, resolveSku: false, location: loc);
+
+        var stored = Assert.Single(readings.List(id));
+        Assert.Equal(loc, stored.Location);
     }
 }
