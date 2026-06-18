@@ -34,8 +34,8 @@ public class ShipmentDelivererTests
         readings.Upsert(id, new ReadingEntry(EpcA, key, "devA", clock.UtcNow));
         readings.Upsert(id, new ReadingEntry(EpcB, key, "devA", clock.UtcNow));
 
-        var sut = new ShipmentDeliverer(sessions, readings, products, snapshots, sender, secrets,
-            new PayloadBuilder(), clock, ids);
+        var publisher = new SnapshotPublisher(readings, products, snapshots, sender, secrets, new PayloadBuilder(), clock, ids);
+        var sut = new ShipmentDeliverer(sessions, publisher, clock);
 
         var target = new DeliveryTarget(
             Url: "https://api.example.com/hook",
@@ -83,8 +83,8 @@ public class ShipmentDelivererTests
         sessions.Save(new Session(id, 1, SessionType.Shipment, "DN-1", clock.UtcNow));
         readings.Upsert(id, new ReadingEntry(EpcA, key, "devA", clock.UtcNow));
 
-        var sut = new ShipmentDeliverer(sessions, readings, products, snapshots, sender, secrets,
-            new PayloadBuilder(), clock, ids);
+        var publisher = new SnapshotPublisher(readings, products, snapshots, sender, secrets, new PayloadBuilder(), clock, ids);
+        var sut = new ShipmentDeliverer(sessions, publisher, clock);
 
         var target = new DeliveryTarget("https://api.example.com/hook", "POST", "1", false, null,
             new Dictionary<string, string>());
@@ -115,8 +115,8 @@ public class ShipmentDelivererTests
         sessions.Save(new Session(id, 1, SessionType.Shipment, "DN-1", clock.UtcNow));
         readings.Upsert(id, new ReadingEntry(EpcA, key, "devA", clock.UtcNow));
 
-        var sut = new ShipmentDeliverer(sessions, readings, products, snapshots, sender, secrets,
-            new PayloadBuilder(), clock, ids);
+        var publisher = new SnapshotPublisher(readings, products, snapshots, sender, secrets, new PayloadBuilder(), clock, ids);
+        var sut = new ShipmentDeliverer(sessions, publisher, clock);
 
         var target = new DeliveryTarget("https://api.example.com/hook", "POST", "1", false, null,
             new Dictionary<string, string>());
@@ -150,8 +150,8 @@ public class ShipmentDelivererTests
         sessions.Save(new Session(id, 1, SessionType.Shipment, "DN-1", clock.UtcNow));
         readings.Upsert(id, new ReadingEntry(EpcA, key, "devA", clock.UtcNow));
 
-        var sut = new ShipmentDeliverer(sessions, readings, products, snapshots, sender, secrets,
-            new PayloadBuilder(), clock, ids);
+        var publisher = new SnapshotPublisher(readings, products, snapshots, sender, secrets, new PayloadBuilder(), clock, ids);
+        var sut = new ShipmentDeliverer(sessions, publisher, clock);
 
         var target = new DeliveryTarget("https://api.example.com/hook", "POST", "1", false, null,
             new Dictionary<string, string>());
@@ -186,8 +186,8 @@ public class ShipmentDelivererTests
         sessions.Save(new Session(id, 1, SessionType.Shipment, "DN-1", clock.UtcNow));
         readings.Upsert(id, new ReadingEntry(EpcA, key, "devA", clock.UtcNow));
 
-        var sut = new ShipmentDeliverer(sessions, readings, products, snapshots, sender, secrets,
-            new PayloadBuilder(), clock, ids);
+        var publisher = new SnapshotPublisher(readings, products, snapshots, sender, secrets, new PayloadBuilder(), clock, ids);
+        var sut = new ShipmentDeliverer(sessions, publisher, clock);
 
         var target = new DeliveryTarget("https://api.example.com/hook", "POST", "1",
             HmacEnabled: true, HmacSecretRef: "hook-hmac", new Dictionary<string, string>());
