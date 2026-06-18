@@ -1,4 +1,5 @@
 // tests/EpcForwarder.Core.Tests/Delivery/InventoryDelivererTests.cs
+using EpcForwarder.Core.Abstractions;
 using EpcForwarder.Core.Delivery;
 using EpcForwarder.Core.Sessions;
 using EpcForwarder.Core.Tests.Fakes;
@@ -40,6 +41,21 @@ public class InventoryDelivererTests
         Assert.Equal(SessionStatus.Open, sessions.Get(id)!.Status); // open のまま
         Assert.Equal("false", sender.Last!.Headers["X-EPCF-Is-Final"]);
         Assert.False(snaps.Records.Single().IsFinal);
+    }
+
+    [Fact]
+    public async Task Provisional_SendFailure_StaysOpen_RecordsFailedSnapshot()
+    {
+        var (sut, id, sessions, snaps, sender) = Build();
+        sender.Next = new WebhookResult(false, 500);
+
+        var result = await sut.SendProvisionalAsync(id, Target());
+
+        Assert.False(result.Success);
+        Assert.Equal(SessionStatus.Open, sessions.Get(id)!.Status); // 失敗でも仮確定はopen維持
+        var snap = Assert.Single(snaps.Records);
+        Assert.False(snap.Success);
+        Assert.False(snap.IsFinal);
     }
 
     [Fact]
