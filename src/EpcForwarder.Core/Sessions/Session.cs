@@ -52,4 +52,26 @@ public sealed class Session
         ForwardedAt = now;
         LastEventAt = now;
     }
+
+    // DB等からの再構築専用。状態遷移チェックを経ずに全フィールドを復元する。
+    public static Session Rehydrate(
+        Guid publicId,
+        int tenantId,
+        SessionType type,
+        string? businessKey,
+        SessionStatus status,
+        int? expectedCount,
+        DateTimeOffset createdAt,
+        DateTimeOffset lastEventAt,
+        DateTimeOffset? finalizedAt,
+        DateTimeOffset? forwardedAt)
+    {
+        var s = new Session(publicId, tenantId, type, businessKey, createdAt);
+        s.Status = status;
+        s.ExpectedCount = expectedCount;
+        s.LastEventAt = lastEventAt;
+        s.FinalizedAt = finalizedAt;
+        s.ForwardedAt = forwardedAt;
+        return s;
+    }
 }
