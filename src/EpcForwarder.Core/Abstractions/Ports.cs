@@ -1,0 +1,62 @@
+using EpcForwarder.Core.Sessions;
+
+namespace EpcForwarder.Core.Abstractions;
+
+public interface IClock { DateTimeOffset UtcNow { get; } }
+
+public interface IIdGenerator { Guid NewGuid(); }
+
+public interface ISessionStore
+{
+    Session? Get(Guid publicId);
+    void Save(Session session);
+}
+
+/// <summary>1セッション内の読取1件。EPC単位で後勝ち。</summary>
+public sealed record ReadingEntry(string Epc, string? SearchKey, string? DeviceId, DateTimeOffset ReadAt);
+
+public interface IReadingStore
+{
+    void Upsert(Guid sessionId, ReadingEntry entry); // EPC一致なら上書き（後勝ち）
+    IReadOnlyList<ReadingEntry> List(Guid sessionId);
+    int CountUnique(Guid sessionId);
+}
+
+public interface IProductCatalog
+{
+    /// <summary>検索キー(hex)からSKUを解決。未登録は null。</summary>
+    string? ResolveSku(int tenantId, string searchKey);
+}
+
+public sealed record SnapshotRecord(Guid SessionId, int Version, bool IsFinal, Guid IdempotencyKey, int ItemCount, bool Success);
+
+public interface ISnapshotStore
+{
+    int NextVersion(Guid sessionId); // セッション内で単調増加
+    void Record(SnapshotRecord record);
+}
+
+public interface ISecretStore
+{
+    Task<string?> GetAsync(string name, CancellationToken ct = default);
+}
+
+public sealed record WebhookRequest(string Url, string Method, IReadOnlyDictionary<string, string> Headers, string Body);
+
+public sealed record WebhookResult(bool Success, int StatusCode);
+
+public interface IWebhookSender
+{
+    Task<WebhookResult> SendAsync(WebhookRequest request, CancellationToken ct = default);
+}
+
+public sealed record ReachabilityResult(int Expected, int Received)
+{
+    public bool IsMatch => Expected == Received;
+    public int Missing => Expected - Received;
+}
+
+public interface IDeviceFeedback
+{
+    Task SendReachabilityAsync(Guid sessionId, ReachabilityResult result, CancellationToken ct = default);
+}
