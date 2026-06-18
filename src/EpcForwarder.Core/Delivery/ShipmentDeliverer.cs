@@ -30,6 +30,9 @@ public sealed class ShipmentDeliverer(
         var session = sessions.Get(sessionId)
             ?? throw new InvalidOperationException($"Session not found: {sessionId}");
 
+        if (session.Status == SessionStatus.Forwarded)
+            throw new InvalidOperationException($"Session {sessionId} is already forwarded; use the re-send flow.");
+
         // Finalize is idempotent + persisted so a failed send can be retried without throwing.
         // Re-sending an already-Forwarded session is out of scope here (handled by the separate re-send flow later).
         if (session.Status == SessionStatus.Open)
@@ -72,7 +75,7 @@ public sealed class ShipmentDeliverer(
             IdempotencyKey: idempotencyKey,
             GeneratedAt: generatedAt,
             Items: items,
-            UnknownTags: new UnknownTags(unknown.Count, unknown));
+            UnknownTags: new UnknownTags(unknown));
 
         var body = payloadBuilder.Serialize(envelope);
         var timestamp = generatedAt.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ");
@@ -89,22 +92,22 @@ public sealed class ShipmentDeliverer(
             ["X-EPCF-Timestamp"] = timestamp,
         };
 
+        // Fail closed: a configured secret that cannot be resolved must abort the send, never send without it.
         foreach (var (name, secretRef) in target.Headers)
         {
-            var value = await secrets.GetAsync(secretRef, ct);
-            if (value is not null)
-            {
-                headers[name] = value;
-            }
+            var value = await secrets.GetAsync(secretRef, ct)
+                ?? throw new InvalidOperationException($"Secret '{secretRef}' for header '{name}' not found.");
+            headers[name] = value;
         }
 
-        if (target.HmacEnabled && target.HmacSecretRef is not null)
+        if (target.HmacEnabled)
         {
-            var key = await secrets.GetAsync(target.HmacSecretRef, ct);
-            if (key is not null)
-            {
-                headers["X-EPCF-Signature"] = HmacSigner.Sign(key, timestamp, body);
-            }
+            if (target.HmacSecretRef is null)
+                throw new InvalidOperationException("HMAC is enabled but no HmacSecretRef is configured.");
+
+            var key = await secrets.GetAsync(target.HmacSecretRef, ct)
+                ?? throw new InvalidOperationException($"HMAC secret '{target.HmacSecretRef}' not found.");
+            headers["X-EPCF-Signature"] = HmacSigner.Sign(key, timestamp, body);
         }
 
         var result = await sender.SendAsync(new WebhookRequest(target.Url, target.Method, headers, body), ct);

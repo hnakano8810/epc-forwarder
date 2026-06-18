@@ -1,8 +1,14 @@
+using System.Net;
 using EpcForwarder.Core.Sessions;
 
 namespace EpcForwarder.Core.Abstractions;
 
 public interface IClock { DateTimeOffset UtcNow { get; } }
+
+public interface IHostResolver
+{
+    IReadOnlyList<IPAddress> Resolve(string host);
+}
 
 public interface IIdGenerator { Guid NewGuid(); }
 

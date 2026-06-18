@@ -19,7 +19,7 @@ public class PayloadBuilderTests
             IdempotencyKey: Guid.Parse("f1e2d3c4-0000-0000-0000-000000000000"),
             GeneratedAt: DateTimeOffset.UnixEpoch,
             Items: new[] { new AggregateItem("ITEM-AAA", 2) },
-            UnknownTags: new UnknownTags(0, Array.Empty<string>()));
+            UnknownTags: new UnknownTags(Array.Empty<string>()));
 
         var json = new PayloadBuilder().Serialize(envelope);
 
@@ -30,6 +30,8 @@ public class PayloadBuilderTests
         Assert.Contains("\"sku\":\"ITEM-AAA\"", json);
         Assert.Contains("\"quantity\":2", json);
         Assert.Contains("\"unknown_tags\":", json);
+        Assert.Contains("\"count\":0", json);
+        Assert.Contains("\"epcs\":", json);
         Assert.Contains("\"generated_at\":", json);
     }
 }

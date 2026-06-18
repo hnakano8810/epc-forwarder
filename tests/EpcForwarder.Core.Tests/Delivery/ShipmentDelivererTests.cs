@@ -130,4 +130,70 @@ public class ShipmentDelivererTests
         Assert.Equal(SessionStatus.Forwarded, sessions.Get(id)!.Status);
         Assert.Single(snapshots.Records);
     }
+
+    [Fact]
+    public async Task FinalizeAndDeliver_AlreadyForwarded_Throws_AndDoesNotResend()
+    {
+        var sessions = new InMemorySessionStore();
+        var readings = new InMemoryReadingStore();
+        var products = new InMemoryProductCatalog();
+        var snapshots = new InMemorySnapshotStore();
+        var sender = new CapturingWebhookSender();
+        var secrets = new FakeSecretStore();
+        var clock = new FixedClock(DateTimeOffset.UnixEpoch);
+        var ids = new SequentialIdGenerator();
+
+        var key = Sgtin96.DeriveSearchKey(EpcA);
+        products.Add(1, key, "ITEM-AAA");
+
+        var id = Guid.NewGuid();
+        sessions.Save(new Session(id, 1, SessionType.Shipment, "DN-1", clock.UtcNow));
+        readings.Upsert(id, new ReadingEntry(EpcA, key, "devA", clock.UtcNow));
+
+        var sut = new ShipmentDeliverer(sessions, readings, products, snapshots, sender, secrets,
+            new PayloadBuilder(), clock, ids);
+
+        var target = new DeliveryTarget("https://api.example.com/hook", "POST", "1", false, null,
+            new Dictionary<string, string>());
+
+        // 1回目: 成功して forwarded
+        await sut.FinalizeAndDeliverAsync(id, target);
+        Assert.Equal(SessionStatus.Forwarded, sessions.Get(id)!.Status);
+        Assert.Equal(1, sender.SendCount);
+
+        // 2回目: forwarded 済みなので throw し、再送しない
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => sut.FinalizeAndDeliverAsync(id, target));
+        Assert.Equal(1, sender.SendCount); // 再送されていない
+    }
+
+    [Fact]
+    public async Task FinalizeAndDeliver_HmacSecretMissing_FailsClosed_NothingSent()
+    {
+        var sessions = new InMemorySessionStore();
+        var readings = new InMemoryReadingStore();
+        var products = new InMemoryProductCatalog();
+        var snapshots = new InMemorySnapshotStore();
+        var sender = new CapturingWebhookSender();
+        var secrets = new FakeSecretStore(); // hook-hmac を登録しない
+        var clock = new FixedClock(DateTimeOffset.UnixEpoch);
+        var ids = new SequentialIdGenerator();
+
+        var key = Sgtin96.DeriveSearchKey(EpcA);
+        products.Add(1, key, "ITEM-AAA");
+
+        var id = Guid.NewGuid();
+        sessions.Save(new Session(id, 1, SessionType.Shipment, "DN-1", clock.UtcNow));
+        readings.Upsert(id, new ReadingEntry(EpcA, key, "devA", clock.UtcNow));
+
+        var sut = new ShipmentDeliverer(sessions, readings, products, snapshots, sender, secrets,
+            new PayloadBuilder(), clock, ids);
+
+        var target = new DeliveryTarget("https://api.example.com/hook", "POST", "1",
+            HmacEnabled: true, HmacSecretRef: "hook-hmac", new Dictionary<string, string>());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => sut.FinalizeAndDeliverAsync(id, target));
+        Assert.Equal(0, sender.SendCount); // 何も送信されていない
+    }
 }

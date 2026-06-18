@@ -1,12 +1,8 @@
 using System.Net;
 using System.Net.Sockets;
+using EpcForwarder.Core.Abstractions;
 
 namespace EpcForwarder.Core.Delivery;
-
-public interface IHostResolver
-{
-    IReadOnlyList<IPAddress> Resolve(string host);
-}
 
 public sealed record WebhookUrlGuardOptions(bool AllowHttp, bool AllowPrivateNetworks);
 

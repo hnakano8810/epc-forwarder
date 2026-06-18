@@ -71,10 +71,12 @@ public sealed class FakeSecretStore : ISecretStore
 public sealed class CapturingWebhookSender : IWebhookSender
 {
     public WebhookRequest? Last { get; private set; }
+    public int SendCount { get; private set; }
     public WebhookResult Next { get; set; } = new(true, 200);
     public Task<WebhookResult> SendAsync(WebhookRequest request, CancellationToken ct = default)
     {
         Last = request;
+        SendCount++;
         return Task.FromResult(Next);
     }
 }

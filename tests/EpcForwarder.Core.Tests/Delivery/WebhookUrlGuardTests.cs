@@ -1,4 +1,5 @@
 using System.Net;
+using EpcForwarder.Core.Abstractions;
 using EpcForwarder.Core.Delivery;
 using Xunit;
 
