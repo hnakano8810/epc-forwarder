@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\EpcForwarder.Core\EpcForwarder.Core.csproj" />
+    <ProjectReference Include="..\..\src\EpcForwarder.Infrastructure\EpcForwarder.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
