@@ -67,3 +67,17 @@ public interface IDeviceFeedback
 {
     Task SendReachabilityAsync(Guid sessionId, ReachabilityResult result, CancellationToken ct = default);
 }
+
+public sealed record ProductRecord(
+    int TenantId,
+    string SearchKey,
+    string Sku,
+    string? ItemCode,
+    string? Color,
+    string? Size,
+    string? Description);
+
+public interface IProductWriteStore
+{
+    void Upsert(ProductRecord product); // (TenantId, SearchKey) で上書き
+}
