@@ -81,3 +81,9 @@ public interface IProductWriteStore
 {
     void Upsert(ProductRecord product); // (TenantId, SearchKey) で上書き
 }
+
+public interface IDestinationCatalog
+{
+    /// <summary>テナントの有効な配信先を DeliveryTarget として返す。</summary>
+    IReadOnlyList<EpcForwarder.Core.Delivery.DeliveryTarget> GetActiveTargets(int tenantId);
+}
