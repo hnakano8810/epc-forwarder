@@ -48,8 +48,8 @@ public class ShipmentE2ETests
 
         var ingestor = new ReadingIngestor(sessions, readings, clock);
         var reconciler = new ShipmentReconciler(sessions, readings, new CapturingDeviceFeedback(), clock);
-        var deliverer = new ShipmentDeliverer(sessions, readings, products, snapshots,
-            new HttpWebhookSender(http), secrets, new PayloadBuilder(), clock, ids);
+        var publisher = new SnapshotPublisher(readings, products, snapshots, new HttpWebhookSender(http), secrets, new PayloadBuilder(), clock, ids);
+        var deliverer = new ShipmentDeliverer(sessions, publisher, clock);
 
         const string epcA = "302DB42318A0038000001231";
         const string epcB = "302DB42318A0038000009999"; // 同一検索キー
