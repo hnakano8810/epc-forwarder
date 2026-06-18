@@ -1,4 +1,5 @@
 -- 0002_destinations.sql  正本: docs/design/data-model.md §3.2/§4
+-- NOTE(poc): FK constraints (destination_header→destination, *→tenant) omitted for PoC; add before production.
 IF OBJECT_ID('dbo.destination') IS NULL
 CREATE TABLE dbo.destination (
     destination_id    INT IDENTITY PRIMARY KEY,

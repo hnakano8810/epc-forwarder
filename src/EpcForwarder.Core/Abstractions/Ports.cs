@@ -1,4 +1,5 @@
 using System.Net;
+using EpcForwarder.Core.Delivery;
 using EpcForwarder.Core.Sessions;
 
 namespace EpcForwarder.Core.Abstractions;
@@ -85,5 +86,5 @@ public interface IProductWriteStore
 public interface IDestinationCatalog
 {
     /// <summary>テナントの有効な配信先を DeliveryTarget として返す。</summary>
-    IReadOnlyList<EpcForwarder.Core.Delivery.DeliveryTarget> GetActiveTargets(int tenantId);
+    IReadOnlyList<DeliveryTarget> GetActiveTargets(int tenantId);
 }

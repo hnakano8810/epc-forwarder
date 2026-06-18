@@ -62,6 +62,7 @@ public sealed class SqlDestinationStoreTests(SqlServerFixture fx)
 
         var t = Assert.Single(targets);
         Assert.Equal("https://active.example.com", t.Url);
+        Assert.Empty(t.Headers);
     }
 
     [Fact]
