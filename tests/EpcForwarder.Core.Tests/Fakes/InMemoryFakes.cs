@@ -40,11 +40,19 @@ public sealed class InMemoryReadingStore : IReadingStore
         _map.TryGetValue(sessionId, out var bag) ? bag.Count : 0;
 }
 
-public sealed class InMemoryProductCatalog : IProductCatalog
+public sealed class InMemoryProductCatalog : IProductCatalog, IProductWriteStore
 {
-    private readonly Dictionary<(int, string), string> _map = new();
-    public void Add(int tenantId, string searchKey, string sku) => _map[(tenantId, searchKey)] = sku;
-    public string? ResolveSku(int tenantId, string searchKey) => _map.GetValueOrDefault((tenantId, searchKey));
+    private readonly Dictionary<(int, string), ProductRecord> _map = new();
+
+    // 既存テスト互換: SKUのみ登録
+    public void Add(int tenantId, string searchKey, string sku) =>
+        _map[(tenantId, searchKey)] = new ProductRecord(tenantId, searchKey, sku, null, null, null, null);
+
+    public void Upsert(ProductRecord product) =>
+        _map[(product.TenantId, product.SearchKey)] = product;
+
+    public string? ResolveSku(int tenantId, string searchKey) =>
+        _map.TryGetValue((tenantId, searchKey), out var p) ? p.Sku : null;
 }
 
 public sealed class InMemorySnapshotStore : ISnapshotStore
