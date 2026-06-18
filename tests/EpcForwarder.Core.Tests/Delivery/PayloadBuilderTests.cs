@@ -29,5 +29,7 @@ public class PayloadBuilderTests
         Assert.Contains("\"idempotency_key\":\"f1e2d3c4", json);
         Assert.Contains("\"sku\":\"ITEM-AAA\"", json);
         Assert.Contains("\"quantity\":2", json);
+        Assert.Contains("\"unknown_tags\":", json);
+        Assert.Contains("\"generated_at\":", json);
     }
 }

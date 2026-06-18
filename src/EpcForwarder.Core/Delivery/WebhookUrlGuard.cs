@@ -32,7 +32,13 @@ public static class WebhookUrlGuard
             return;
         }
 
-        foreach (var ip in resolver.Resolve(uri.Host))
+        var addresses = resolver.Resolve(uri.Host);
+        if (addresses.Count == 0)
+        {
+            throw new InvalidOperationException($"Could not resolve any address for host: {uri.Host}");
+        }
+
+        foreach (var ip in addresses)
         {
             if (IsBlocked(ip))
             {
@@ -46,6 +52,12 @@ public static class WebhookUrlGuard
         if (IPAddress.IsLoopback(ip))
         {
             return true;
+        }
+
+        // IPv4-mapped IPv6 (::ffff:a.b.c.d) は IPv4 ルールで評価する。
+        if (ip.IsIPv4MappedToIPv6)
+        {
+            ip = ip.MapToIPv4();
         }
 
         if (ip.AddressFamily == AddressFamily.InterNetwork)

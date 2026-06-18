@@ -32,6 +32,14 @@ public class SessionTests
     }
 
     [Fact]
+    public void Finalize_Twice_Throws()
+    {
+        var s = NewOpen();
+        s.Finalize(DateTimeOffset.UnixEpoch);
+        Assert.Throws<InvalidOperationException>(() => s.Finalize(DateTimeOffset.UnixEpoch));
+    }
+
+    [Fact]
     public void MarkForwarded_AfterFinalize_Succeeds()
     {
         var s = NewOpen();

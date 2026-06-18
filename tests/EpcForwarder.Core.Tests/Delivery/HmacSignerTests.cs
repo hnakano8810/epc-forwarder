@@ -6,6 +6,14 @@ namespace EpcForwarder.Core.Tests.Delivery;
 public class HmacSignerTests
 {
     [Fact]
+    public void Sign_KnownVector()
+    {
+        // HMAC-SHA256(key="secret", msg="2026-01-01T00:00:00Z.{}") を openssl で算出した既知値。
+        var sig = HmacSigner.Sign("secret", "2026-01-01T00:00:00Z", "{}");
+        Assert.Equal("sha256=7ca29ad01d3d187eeda8d72f7c0b95c5a81154ce5a87f66f472bf350d4183a5d", sig);
+    }
+
+    [Fact]
     public void Sign_Format_IsSha256PrefixedHex()
     {
         var sig = HmacSigner.Sign("secret", "2026-06-18T00:00:00Z", "{}");

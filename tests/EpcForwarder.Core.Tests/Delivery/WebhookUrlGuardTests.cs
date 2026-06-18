@@ -44,4 +44,11 @@ public class WebhookUrlGuardTests
         var opt = new WebhookUrlGuardOptions(AllowHttp: true, AllowPrivateNetworks: true);
         WebhookUrlGuard.Validate("http://127.0.0.1:5000/hook", opt, new FakeResolver("127.0.0.1"));
     }
+
+    [Fact]
+    public void Validate_EmptyResolve_Throws()
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            WebhookUrlGuard.Validate("https://api.example.com/hook", Strict, new FakeResolver()));
+    }
 }
