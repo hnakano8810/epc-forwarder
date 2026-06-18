@@ -39,7 +39,7 @@ public class HttpWebhookSenderTests
 
         var result = await sut.SendAsync(new WebhookRequest(prefix, "POST", headers, "{\"hello\":1}"));
 
-        await serverTask;
+        await serverTask.WaitAsync(TimeSpan.FromSeconds(5));
         listener.Stop();
 
         Assert.True(result.Success);

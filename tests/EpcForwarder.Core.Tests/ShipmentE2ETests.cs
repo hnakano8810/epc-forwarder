@@ -23,7 +23,7 @@ public class ShipmentE2ETests
     {
         // --- 受信側(連携先)スタブ ---
         using var listener = new HttpListener();
-        const string url = "http://127.0.0.1:8780/hook/";
+        const string url = "http://127.0.0.1:18790/hook/";
         listener.Prefixes.Add(url);
         listener.Start();
         string? body = null;
@@ -73,7 +73,7 @@ public class ShipmentE2ETests
             Headers: new Dictionary<string, string>());
         var result = await deliverer.FinalizeAndDeliverAsync(id, target);
 
-        await server;
+        await server.WaitAsync(TimeSpan.FromSeconds(5));
         listener.Stop();
 
         // --- 検証 ---
