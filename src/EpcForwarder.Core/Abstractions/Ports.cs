@@ -1,4 +1,5 @@
 using System.Net;
+using EpcForwarder.Core.Delivery;
 using EpcForwarder.Core.Sessions;
 
 namespace EpcForwarder.Core.Abstractions;
@@ -80,4 +81,10 @@ public sealed record ProductRecord(
 public interface IProductWriteStore
 {
     void Upsert(ProductRecord product); // (TenantId, SearchKey) で上書き
+}
+
+public interface IDestinationCatalog
+{
+    /// <summary>テナントの有効な配信先を DeliveryTarget として返す。</summary>
+    IReadOnlyList<DeliveryTarget> GetActiveTargets(int tenantId);
 }

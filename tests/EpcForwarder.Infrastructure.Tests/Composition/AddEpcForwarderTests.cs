@@ -36,6 +36,7 @@ public class AddEpcForwarderTests
     [InlineData(typeof(IIdGenerator))]
     [InlineData(typeof(IHostResolver))]
     [InlineData(typeof(IDeviceFeedback))]
+    [InlineData(typeof(EpcForwarder.Core.Abstractions.IDestinationCatalog))]
     public void Resolves_AllPrimaryServices(Type serviceType)
     {
         using var sp = Build();

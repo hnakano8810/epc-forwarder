@@ -16,6 +16,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<SqlProductStore>();
         services.AddSingleton<IProductCatalog>(sp => sp.GetRequiredService<SqlProductStore>());
         services.AddSingleton<IProductWriteStore>(sp => sp.GetRequiredService<SqlProductStore>());
+        services.AddSingleton<IDestinationCatalog, SqlDestinationStore>();
         return services;
     }
 }
