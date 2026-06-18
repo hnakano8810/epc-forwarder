@@ -28,6 +28,7 @@
 | `X-EPCF-Tenant` | `acme` | テナントコード |
 | `X-EPCF-Session` | `9c3a...`(UUID) | `session.public_id` |
 | `X-EPCF-Snapshot-Version` | `3` | セッション内で単調増加 |
+| `X-EPCF-Schema-Version` | `1` | 受信先が定義するペイロードスキーマのバージョン（`destination.schema_version`） |
 | `X-EPCF-Is-Final` | `true`/`false` | 最終版判定 |
 | `X-EPCF-Timestamp` | `2026-06-18T12:34:56Z` | 署名のリプレイ防止に使用 |
 | `X-EPCF-Signature` | `sha256=...` | HMAC署名（§4、有効時のみ） |
@@ -45,6 +46,7 @@
 ### 3.1 aggregate（SKU＋数量）— 既定
 ```json
 {
+  "schema_version": "1",
   "tenant": "acme",
   "session_id": "9c3a8f10-...",
   "business_key": "DN-2026-000123",
@@ -54,8 +56,8 @@
   "idempotency_key": "f1e2d3c4-...",
   "generated_at": "2026-06-18T12:34:56Z",
   "items": [
-    { "sku": "ITEM-AAA", "quantity": 2 },
-    { "sku": "ITEM-BBB", "quantity": 1 }
+    { "sku": "ITEM-AAA", "item_code": "ST-100", "color": "BLK", "size": "M", "quantity": 2 },
+    { "sku": "ITEM-BBB", "item_code": "ST-100", "color": "BLK", "size": "L", "quantity": 1 }
   ],
   "unknown_tags": { "count": 0, "epcs": [] }
 }
@@ -64,22 +66,25 @@
 ### 3.2 raw（マスタ無し・EPCそのまま）
 ```json
 {
+  "schema_version": "1",
   "tenant": "acme", "session_id": "9c3a8f10-...", "type": "inventory",
   "snapshot_version": 1, "is_final": true, "idempotency_key": "...",
   "generated_at": "2026-06-18T12:34:56Z",
   "items": [
-    { "epc": "302DB42318A0038000001231", "location": "A-01", "read_at": "2026-06-18T12:30:01Z" },
-    { "epc": "302DB42318A0038000009999", "location": "A-01", "read_at": "2026-06-18T12:30:02Z" }
+    { "epc": "302DB42318A0038000001231", "location": { "l1": "TOKYO-DC", "l2": "2F", "l3": "A-01" }, "read_at": "2026-06-18T12:30:01Z" },
+    { "epc": "302DB42318A0038000009999", "location": { "l1": "TOKYO-DC", "l2": "2F", "l3": "A-01" }, "read_at": "2026-06-18T12:30:02Z" }
   ]
 }
 ```
 
 ### 3.3 detail（SKU＋シリアル）※将来
 ```json
-{ "items": [ { "sku": "ITEM-AAA", "epc": "302DB42318A0038000001231", "location": "A-01" } ] }
+{ "items": [ { "sku": "ITEM-AAA", "item_code": "ST-100", "color": "BLK", "size": "M",
+              "epc": "302DB42318A0038000001231", "location": { "l1": "TOKYO-DC", "l2": "2F", "l3": "A-01" } } ] }
 ```
 
 - **未知タグ**（aggregate/detailで商品マスタ未登録）は本体に混ぜず `unknown_tags` に件数＋EPCを分離（data-model §6.4）。
+- 商品属性（`item_code`/`color`/`size`）は `product` の3属性（data-model §3.3）由来。受信先スキーマが必要な項目だけを採用する。
 
 ---
 
@@ -119,8 +124,14 @@
 
 ---
 
-## 8. 未決事項
+## 8. スキーマ定義の方針（決定）
 
-1. ペイロードのスキーマバージョニング（`schema_version` フィールド要否）。
-2. 大規模 `raw` 連携時のページング/分割POST（数十万EPCをそのまま送る場合）。aggregateは集約で小さいが、rawは大きくなりうる。
-3. ヘッダー名（`X-EPCF-*`）の最終確定とドキュメント公開（受信先実装者向け）。
+スキーマは**連携先ごとに定義**する。`destination.schema_version` は受信先が決める**固定値**として設定し、ペイロード（`schema_version`）とヘッダー（`X-EPCF-Schema-Version`）に載せる。受信先が自分の都合でスキーマを変えたら `2` 等に上げてもらう運用とする（バージョン管理の責任は受信側に寄せる）。
+
+- v1: 上記の固定バージョン値＋本ドキュメントの標準スキーマ（aggregate/raw/detail）。
+- 将来: 連携先ごとに**フィールドマッピング/テンプレートを定義**できる仕組み（出力スキーマのカスタマイズ）。これにより受信先は自前のスキーマで受け取れ、`schema_version` はそのテンプレートの版を指す。
+
+## 9. 未決事項
+
+1. 大規模 `raw` 連携時のページング/分割POST（数十万EPCをそのまま送る場合）。aggregateは集約で小さいが、rawは大きくなりうる。
+2. ヘッダー名（`X-EPCF-*`）の最終確定とドキュメント公開（受信先実装者向け）。

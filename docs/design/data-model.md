@@ -65,12 +65,16 @@ CREATE TABLE dbo.mask (
 CREATE TABLE dbo.product (
     tenant_id    INT           NOT NULL REFERENCES dbo.tenant(tenant_id),
     search_key   VARBINARY(32) NOT NULL,          -- EPC & Mask の結果（シリアル0クリア済み）
-    sku          NVARCHAR(64)  NOT NULL,
+    sku          NVARCHAR(64)  NOT NULL,           -- 完全なSKU識別子
+    item_code    NVARCHAR(64)  NULL,               -- 品番（スタイル）   ┐ 連携/集約で
+    color        NVARCHAR(32)  NULL,               -- カラー             ├ 使う3属性
+    size         NVARCHAR(32)  NULL,               -- サイズ             ┘
     description  NVARCHAR(200) NULL,
     updated_at   DATETIME2(3)  NOT NULL DEFAULT SYSUTCDATETIME(),
     CONSTRAINT PK_product PRIMARY KEY (tenant_id, search_key)  -- O(1)検索の核
 );
 ```
+- **商品属性は3階層**（品番／カラー／サイズ）を保持し、連携時にSKUより粗い粒度（品番別・カラー別等）での集約・突合に使えるようにする。不足する場合は属性列を拡張する。
 - 登録時に「既知GTIN/独自コード → 検索キー」へ変換して投入する（基本設計の onboarding。標準SGTIN-96でもGTIN→検索キーのエンコーダが必要、`epc-mask.md` 参照）。
 - `(tenant_id, search_key)` の複合PKで、受信EPCをマスクした値から一発でSKU特定。
 - **商品マスタは任意**: 「何らかの単位で読んでシリアル(EPC)だけを連携したい」顧客向けに、`product` を持たず SKU解決をスキップする **rawモード** を許容する（§4.1）。この場合 `reading.search_key` はNULL。
@@ -88,6 +92,7 @@ CREATE TABLE dbo.destination (
     url              NVARCHAR(2048) NOT NULL,
     http_method      VARCHAR(8)   NOT NULL DEFAULT 'POST',
     payload_mode     VARCHAR(16)  NOT NULL DEFAULT 'aggregate', -- aggregate(SKU+数量) / detail(SKU+シリアル,将来) / raw(マスタ無し・EPCそのまま)
+    schema_version   NVARCHAR(16) NOT NULL DEFAULT '1',         -- 受信先が定義するスキーマのバージョン（固定値設定）
     allow_provisional BIT         NOT NULL DEFAULT 1,           -- replace-by-snapshot不可な受信先は0
     hmac_enabled     BIT          NOT NULL DEFAULT 0,
     hmac_secret_ref  NVARCHAR(200) NULL,                        -- Key Vaultのシークレット名（値は持たない）
@@ -122,6 +127,7 @@ CREATE TABLE dbo.session (
     type           VARCHAR(16)  NOT NULL,         -- 'shipment'(伝票) / 'inventory'(棚卸)
     business_key   NVARCHAR(128) NULL,            -- 伝票番号 / 棚卸キャンペーンID
     status         VARCHAR(16)  NOT NULL DEFAULT 'open', -- open→finalized→forwarded→archived→purged
+    resolve_sku    BIT          NOT NULL DEFAULT 1, -- 1=EPC&MaskでSKU解決 / 0=rawモード(マスク・SKU解決なし)。テナント既定から設定
     expected_count INT          NULL,             -- 伝票: 端末申告のユニーク件数(total_count)
     created_at     DATETIME2(3) NOT NULL DEFAULT SYSUTCDATETIME(),
     last_event_at  DATETIME2(3) NOT NULL DEFAULT SYSUTCDATETIME(), -- タイムアウト判定用
@@ -143,7 +149,9 @@ CREATE TABLE dbo.reading (
     tenant_id   INT          NOT NULL,
     epc         VARBINARY(32) NOT NULL,            -- 生EPC（シリアル保持＝個体識別・将来の明細転送用）
     search_key  VARBINARY(32) NULL,                -- epc & mask（SKU特定用）。rawモード/マスク未設定時はNULL
-    location    NVARCHAR(64) NULL,                 -- 棚卸: 棚番/エリアID
+    location_l1 NVARCHAR(64) NULL,                 -- ロケ階層1（例: 拠点）   ┐ 棚卸の
+    location_l2 NVARCHAR(64) NULL,                 -- ロケ階層2（例: フロア）  ├ コンテキスト
+    location_l3 NVARCHAR(64) NULL,                 -- ロケ階層3（例: 棚番）   ┘ 3階層
     device_id   NVARCHAR(128) NULL,
     read_at     DATETIME2(3) NOT NULL,
     excluded    BIT          NOT NULL DEFAULT 0,    -- 論理削除（過剰読取の除外, 将来UI）
@@ -153,9 +161,9 @@ CREATE TABLE dbo.reading (
 -- 集約（SKU別数量）
 CREATE INDEX IX_reading_agg ON dbo.reading(session_id, search_key) INCLUDE(excluded);
 -- 棚卸: ロケ別明細
-CREATE INDEX IX_reading_loc ON dbo.reading(session_id, location, search_key) INCLUDE(excluded);
+CREATE INDEX IX_reading_loc ON dbo.reading(session_id, location_l1, location_l2, location_l3, search_key) INCLUDE(excluded);
 ```
-- **後勝ち（last-write-wins）**: `(session_id, epc)` で MERGE/UPSERT。既存行があれば `location, search_key, device_id, read_at, updated_at` を上書き（tag1をAで読んだ後Bで読めばBに収束）。
+- **後勝ち（last-write-wins）**: `(session_id, epc)` で MERGE/UPSERT。既存行があれば `location_l1/l2/l3, search_key, device_id, read_at, updated_at` を上書き（tag1をAで読んだ後Bで読めばBに収束）。
 - **集約時は `excluded = 0` のみ**を対象。
 - クラスタ化キーは `reading_id`(単調増加)で挿入性能を確保。重複判定・後勝ちは `UQ_reading(session_id, epc)` を使用。
 
@@ -165,12 +173,13 @@ MERGE dbo.reading WITH (HOLDLOCK) AS t
 USING (SELECT @session_id AS session_id, @epc AS epc) AS s
    ON (t.session_id = s.session_id AND t.epc = s.epc)
 WHEN MATCHED THEN UPDATE SET
-   t.search_key = @search_key, t.location = @location,
+   t.search_key = @search_key,
+   t.location_l1 = @loc1, t.location_l2 = @loc2, t.location_l3 = @loc3,
    t.device_id = @device_id, t.read_at = @read_at, t.updated_at = SYSUTCDATETIME(),
    t.excluded = 0
 WHEN NOT MATCHED THEN INSERT
-   (session_id, tenant_id, epc, search_key, location, device_id, read_at)
-   VALUES (@session_id, @tenant_id, @epc, @search_key, @location, @device_id, @read_at);
+   (session_id, tenant_id, epc, search_key, location_l1, location_l2, location_l3, device_id, read_at)
+   VALUES (@session_id, @tenant_id, @epc, @search_key, @loc1, @loc2, @loc3, @device_id, @read_at);
 ```
 - マイクロバッチ（1秒/100件）では **テーブル値パラメータ (TVP) によるバルクMERGE** を推奨（往復削減）。
 
@@ -178,6 +187,7 @@ WHEN NOT MATCHED THEN INSERT
 ```sql
 CREATE TABLE dbo.snapshot (
     snapshot_id     BIGINT IDENTITY PRIMARY KEY,
+    tenant_id       INT          NOT NULL REFERENCES dbo.tenant(tenant_id), -- 失敗ログUI/再送の絞り込み用
     session_id      BIGINT       NOT NULL REFERENCES dbo.session(session_id),
     destination_id  INT          NOT NULL REFERENCES dbo.destination(destination_id),
     version         INT          NOT NULL,         -- セッション内で単調増加（仮確定の世代）
@@ -190,11 +200,10 @@ CREATE TABLE dbo.snapshot (
     sent_at         DATETIME2(3) NULL,
     CONSTRAINT UQ_snapshot_ver UNIQUE (session_id, destination_id, version)
 );
-CREATE INDEX IX_snapshot_status ON dbo.snapshot(tenant_id, status) ; -- 失敗ログUI/再送
+CREATE INDEX IX_snapshot_status ON dbo.snapshot(tenant_id, status); -- 失敗ログUI/再送
 ```
 - `version` 単調増加＋`is_final` で、受信側が「最新版で置換」「最終版判定」できる（基本設計5.2.1）。
 - `status='dead'` が基本設計5.4のポイズン相当。管理画面の「再送」は新 `snapshot` を起票して再送する。
-- 注: 上の `IX_snapshot_status` で `tenant_id` を使うため、列を追加するか `session` 結合に変更（実装時に確定）。
 
 ### 5.4 delivery_attempt（送信試行ログ）
 ```sql
@@ -223,17 +232,18 @@ GROUP BY p.sku;
 
 ### 6.2 ロケ別SKU明細（棚卸の端末フィードバック）
 ```sql
-SELECT r.location, p.sku, COUNT(*) AS quantity
+SELECT r.location_l1, r.location_l2, r.location_l3, p.sku, COUNT(*) AS quantity
 FROM dbo.reading r
 JOIN dbo.product p ON p.tenant_id = r.tenant_id AND p.search_key = r.search_key
 WHERE r.session_id = @session_id AND r.excluded = 0
-GROUP BY r.location, p.sku;
+GROUP BY r.location_l1, r.location_l2, r.location_l3, p.sku;
 ```
+- 品番/カラー/サイズ単位など粗い粒度が要る場合は `GROUP BY p.item_code` 等に切り替える（`product` の3属性を利用）。
 - 数十万タグでも SKU集約後は数千件規模に収束し、ペイロードは軽量（基本設計5.2.1）。
 
 ### 6.3 raw モード（マスタ無し・EPCそのまま連携）
 ```sql
-SELECT r.location, r.epc, r.read_at
+SELECT r.location_l1, r.location_l2, r.location_l3, r.epc, r.read_at
 FROM dbo.reading r
 WHERE r.session_id = @session_id AND r.excluded = 0;
 ```
@@ -276,9 +286,12 @@ WHERE r.session_id = @session_id AND r.excluded = 0 AND p.sku IS NULL;
 2. **伝票の再読取**: 同一 `business_key` で**新セッション**を払い出す（履歴保持・冪等性キー単位が明確）。
 3. **未知タグ**（商品マスタ未登録EPC）: 本体と分離した**「未知タグ」レーンで通知**（§6.4）。
 4. **商品マスタ任意（rawモード）**: マスク/マスタ無しで生EPCをそのまま連携するモードを許容（§4.1, §6.3）。
+5. **ロケ階層・商品属性**: `reading` のロケは3階層（`location_l1/l2/l3`、例: 拠点/フロア/棚番）、`product` は3属性（品番/カラー/サイズ）を保持。連携・集約の粒度に使う。
+6. **`snapshot.tenant_id`**: 列を追加（失敗ログ/再送の絞り込み。§5.3 反映済み）。
+7. **rawモード（マスク有無）の決定**: **`session` 単位**で決定（`session.resolve_sku`、テナント既定から設定）。`destination.payload_mode` はこれと整合する範囲で表現を選ぶ。
+8. **SQLアクセス**: 管理容易性を優先し **EF Core を単一ORM** とする（マイグレーション一元管理）。ホットパスのバルクMERGE/TVPは EF Core の生SQL実行（`FromSql`/`ExecuteSql`/ADO）で対応し、第2ライブラリは導入しない。
+9. **`reading` のパーティショニング**: 現時点で**不要**（棚卸ピークは将来再評価）。
 
 ### 未決（実装時に確定）
-1. `snapshot` の `tenant_id` 列追加 or `session` 結合（インデックス設計）。
-2. `reading` 高ボリューム時のパーティショニング/インデックス再構成方針（棚卸ピーク）。
-3. SQL アクセスは Dapper（ホットパス）＋ EF Core（設定/マスタ）の併用か単一か。
-4. rawモードでの重複排除キー: `epc` のみで後勝ち（マスク非依存）。マスク有無を `destination`/`session` のどちらで決定するか（テナント既定＋宛先上書き想定）。
+1. rawモードの大規模連携時の分割POST（webhook-contract §9 と連動）。
+2. ロケ3階層の意味づけ（拠点/フロア/棚番）をテナント設定で命名可能にするか固定にするか。
