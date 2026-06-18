@@ -1,12 +1,9 @@
 // tests/EpcForwarder.Infrastructure.Tests/SqlBackedInventoryFlowTests.cs
-using Dapper;
 using EpcForwarder.Core.Abstractions;
 using EpcForwarder.Core.Delivery;
-using EpcForwarder.Core.Epc;
 using EpcForwarder.Core.Products;
 using EpcForwarder.Core.Sessions;
 using EpcForwarder.Infrastructure.Persistence;
-using Microsoft.Data.SqlClient;
 using Xunit;
 
 namespace EpcForwarder.Infrastructure.Tests;
@@ -40,14 +37,6 @@ public sealed class SqlBackedInventoryFlowTests(SqlServerFixture fx)
         return body13 + (10 - (sum % 10)) % 10;
     }
 
-    private int NewTenant()
-    {
-        using var conn = new SqlConnection(fx.ConnectionString);
-        return conn.QuerySingle<int>(
-            "INSERT INTO dbo.tenant(code,name) OUTPUT INSERTED.tenant_id VALUES(@c,'t')",
-            new { c = Guid.NewGuid().ToString("N") });
-    }
-
     [Fact]
     public async Task Inventory_OverSql_Register_Ingest_Provisional_Finalize()
     {
@@ -65,7 +54,7 @@ public sealed class SqlBackedInventoryFlowTests(SqlServerFixture fx)
         var inventory = new InventoryDeliverer(sessions, publisher, clock);
         var registrar = new ProductRegistrar(products);
 
-        var tenant = NewTenant();
+        var tenant = fx.NewTenant();
         var gtin = Gtin14("0000000000001"); // 共有ヘルパ(Core.Tests)と同じ規則
         var key = registrar.Register(tenant, gtin, gcpLength: 7, filter: 1, sku: "ITEM-AAA");
 

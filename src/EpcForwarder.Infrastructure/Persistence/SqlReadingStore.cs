@@ -19,6 +19,7 @@ public sealed class SqlReadingStore(SqlConnectionFactory factory) : IReadingStor
                updated_at = SYSDATETIMEOFFSET(), excluded = 0
             WHEN NOT MATCHED THEN INSERT
                (session_id, tenant_id, epc, search_key, device_id, read_at)
+               -- TODO(poc): tenant_id should come from the session; the port doesn't carry it yet — JOIN to dbo.tenant will fail for this row.
                VALUES (@SessionId, 0, @Epc, @SearchKey, @DeviceId, @ReadAt);
             """,
             new

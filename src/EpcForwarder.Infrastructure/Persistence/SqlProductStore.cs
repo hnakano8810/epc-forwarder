@@ -19,6 +19,7 @@ public sealed class SqlProductStore(SqlConnectionFactory factory) : IProductCata
         using var conn = factory.Create();
         conn.Execute(
             """
+            -- add WITH (HOLDLOCK) if concurrent product upserts (bulk import) are introduced
             MERGE dbo.product AS t
             USING (SELECT @TenantId AS tenant_id, @Key AS search_key) AS s
                ON t.tenant_id = s.tenant_id AND t.search_key = s.search_key

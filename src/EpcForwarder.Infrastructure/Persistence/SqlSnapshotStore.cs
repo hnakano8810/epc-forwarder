@@ -21,6 +21,7 @@ public sealed class SqlSnapshotStore(SqlConnectionFactory factory) : ISnapshotSt
         conn.Execute(
             """
             INSERT INTO dbo.snapshot (tenant_id, session_id, version, is_final, idempotency_key, item_count, success)
+            -- TODO(poc): tenant_id should come from the session; the port doesn't carry it yet — JOIN to dbo.tenant will fail for this row.
             VALUES (0, @SessionId, @Version, @IsFinal, @IdempotencyKey, @ItemCount, @Success)
             """,
             new

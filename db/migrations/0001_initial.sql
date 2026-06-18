@@ -28,6 +28,7 @@ CREATE TABLE dbo.session (
     type           VARCHAR(16)  NOT NULL,
     business_key   NVARCHAR(128) NULL,
     status         VARCHAR(16)  NOT NULL,
+    -- reserved: session-level mask/SKU解決モード(rawモード切替)用。現状はストアから未書き込み。
     resolve_sku    BIT          NOT NULL CONSTRAINT DF_session_resolve DEFAULT 1,
     expected_count INT          NULL,
     created_at     DATETIMEOFFSET(3) NOT NULL,

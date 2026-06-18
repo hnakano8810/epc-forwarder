@@ -21,8 +21,8 @@ public sealed class SqlSessionStore(SqlConnectionFactory factory) : ISessionStor
         return row is null
             ? null
             : Session.Rehydrate(
-                row.PublicId, row.TenantId, Enum.Parse<SessionType>(row.Type), row.BusinessKey,
-                Enum.Parse<SessionStatus>(row.Status), row.ExpectedCount,
+                row.PublicId, row.TenantId, Enum.Parse<SessionType>(row.Type, ignoreCase: true), row.BusinessKey,
+                Enum.Parse<SessionStatus>(row.Status, ignoreCase: true), row.ExpectedCount,
                 row.CreatedAt, row.LastEventAt, row.FinalizedAt, row.ForwardedAt);
     }
 

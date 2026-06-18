@@ -1,8 +1,6 @@
 // tests/EpcForwarder.Infrastructure.Tests/SqlSessionStoreTests.cs
-using Dapper;
 using EpcForwarder.Core.Sessions;
 using EpcForwarder.Infrastructure.Persistence;
-using Microsoft.Data.SqlClient;
 using Xunit;
 
 namespace EpcForwarder.Infrastructure.Tests;
@@ -10,14 +8,6 @@ namespace EpcForwarder.Infrastructure.Tests;
 [Collection("sql")]
 public sealed class SqlSessionStoreTests(SqlServerFixture fx)
 {
-    private int NewTenant()
-    {
-        using var conn = new SqlConnection(fx.ConnectionString);
-        return conn.QuerySingle<int>(
-            "INSERT INTO dbo.tenant(code,name) OUTPUT INSERTED.tenant_id VALUES(@c,'t')",
-            new { c = Guid.NewGuid().ToString("N") });
-    }
-
     [Fact]
     public void Get_Unknown_ReturnsNull()
     {
@@ -30,7 +20,7 @@ public sealed class SqlSessionStoreTests(SqlServerFixture fx)
     {
         var store = new SqlSessionStore(new SqlConnectionFactory(fx.ConnectionString));
         var id = Guid.NewGuid();
-        var s = new Session(id, NewTenant(), SessionType.Inventory, "CAMP-1", DateTimeOffset.UnixEpoch);
+        var s = new Session(id, fx.NewTenant(), SessionType.Inventory, "CAMP-1", DateTimeOffset.UnixEpoch);
 
         store.Save(s);
         var loaded = store.Get(id)!;
@@ -45,7 +35,7 @@ public sealed class SqlSessionStoreTests(SqlServerFixture fx)
     {
         var store = new SqlSessionStore(new SqlConnectionFactory(fx.ConnectionString));
         var id = Guid.NewGuid();
-        var s = new Session(id, NewTenant(), SessionType.Shipment, "DN-1", DateTimeOffset.UnixEpoch);
+        var s = new Session(id, fx.NewTenant(), SessionType.Shipment, "DN-1", DateTimeOffset.UnixEpoch);
         store.Save(s);
 
         s.Finalize(DateTimeOffset.UnixEpoch.AddMinutes(1));
