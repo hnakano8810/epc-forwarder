@@ -1,0 +1,4 @@
+-- 0001_initial.sql （プレースホルダ）
+-- 実スキーマは docs/design/data-model.md を正本とし、本ファイルに段階的に反映する。
+-- 対象テーブル: tenant / mask / product / destination / destination_header /
+--              session / reading / snapshot / delivery_attempt
