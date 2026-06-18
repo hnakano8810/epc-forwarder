@@ -25,12 +25,12 @@ public sealed class InMemorySessionStore : ISessionStore
 
 public sealed class InMemoryReadingStore : IReadingStore
 {
-    private readonly ConcurrentDictionary<Guid, Dictionary<string, ReadingEntry>> _map = new();
+    private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<string, ReadingEntry>> _map = new();
 
     public void Upsert(Guid sessionId, ReadingEntry entry)
     {
-        var bag = _map.GetOrAdd(sessionId, _ => new Dictionary<string, ReadingEntry>());
-        lock (bag) { bag[entry.Epc] = entry; }
+        var bag = _map.GetOrAdd(sessionId, _ => new ConcurrentDictionary<string, ReadingEntry>());
+        bag[entry.Epc] = entry; // last-write-wins by EPC
     }
 
     public IReadOnlyList<ReadingEntry> List(Guid sessionId) =>

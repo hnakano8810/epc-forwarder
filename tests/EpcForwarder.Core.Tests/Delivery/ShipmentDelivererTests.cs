@@ -60,7 +60,42 @@ public class ShipmentDelivererTests
         Assert.Contains("\"quantity\":2", req.Body); // EpcA+EpcB が同一SKUに集約
         Assert.True(req.Headers.ContainsKey("Idempotency-Key"));
         Assert.Equal("true", req.Headers["X-EPCF-Is-Final"]);
-        Assert.True(req.Headers.ContainsKey("X-EPCF-Signature"));
+        var expectedSig = HmacSigner.Sign("topsecret", "1970-01-01T00:00:00Z", req.Body);
+        Assert.Equal(expectedSig, req.Headers["X-EPCF-Signature"]);
+    }
+
+    [Fact]
+    public async Task FinalizeAndDeliver_SendFailure_NotForwarded_RecordsFailedSnapshot()
+    {
+        var sessions = new InMemorySessionStore();
+        var readings = new InMemoryReadingStore();
+        var products = new InMemoryProductCatalog();
+        var snapshots = new InMemorySnapshotStore();
+        var sender = new CapturingWebhookSender { Next = new WebhookResult(false, 500) };
+        var secrets = new FakeSecretStore();
+        var clock = new FixedClock(DateTimeOffset.UnixEpoch);
+        var ids = new SequentialIdGenerator();
+
+        var key = Sgtin96.DeriveSearchKey(EpcA);
+        products.Add(1, key, "ITEM-AAA");
+
+        var id = Guid.NewGuid();
+        sessions.Save(new Session(id, 1, SessionType.Shipment, "DN-1", clock.UtcNow));
+        readings.Upsert(id, new ReadingEntry(EpcA, key, "devA", clock.UtcNow));
+
+        var sut = new ShipmentDeliverer(sessions, readings, products, snapshots, sender, secrets,
+            new PayloadBuilder(), clock, ids);
+
+        var target = new DeliveryTarget("https://api.example.com/hook", "POST", "1", false, null,
+            new Dictionary<string, string>());
+
+        var result = await sut.FinalizeAndDeliverAsync(id, target);
+
+        Assert.False(result.Success);
+        // 送信失敗 → forwarded にならず finalized 止まり（リトライ可能）
+        Assert.Equal(SessionStatus.Finalized, sessions.Get(id)!.Status);
+        var snap = Assert.Single(snapshots.Records);
+        Assert.False(snap.Success);
     }
 
     [Fact]
@@ -92,5 +127,7 @@ public class ShipmentDelivererTests
         Assert.Contains("\"items\":[]", req.Body);
         Assert.Contains("\"count\":1", req.Body);       // unknown_tags.count
         Assert.DoesNotContain("X-EPCF-Signature", string.Join(",", req.Headers.Keys)); // HMAC無効
+        Assert.Equal(SessionStatus.Forwarded, sessions.Get(id)!.Status);
+        Assert.Single(snapshots.Records);
     }
 }

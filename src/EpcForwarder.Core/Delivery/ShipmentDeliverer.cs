@@ -30,10 +30,18 @@ public sealed class ShipmentDeliverer(
         var session = sessions.Get(sessionId)
             ?? throw new InvalidOperationException($"Session not found: {sessionId}");
 
-        session.Finalize(clock.UtcNow);
+        // Finalize is idempotent + persisted so a failed send can be retried without throwing.
+        // Re-sending an already-Forwarded session is out of scope here (handled by the separate re-send flow later).
+        if (session.Status == SessionStatus.Open)
+        {
+            session.Finalize(clock.UtcNow);
+            sessions.Save(session); // persist FinalizedAt regardless of send outcome (enables retry)
+        }
 
         var resolved = new List<string>();
         var unknown = new List<string>();
+        // PoC assumption: raw-mode EPCs (SearchKey null) land in unknown_tags together with genuine
+        // catalog misses. Not exercised in the shipment slice since resolveSku=true.
         foreach (var entry in readings.List(sessionId))
         {
             var sku = entry.SearchKey is null ? null : products.ResolveSku(session.TenantId, entry.SearchKey);
@@ -48,6 +56,7 @@ public sealed class ShipmentDeliverer(
         }
 
         var items = SkuAggregator.Aggregate(resolved);
+        // PoC assumption: the snapshot version is consumed before send, so a throw mid-send leaves a version gap.
         var version = snapshots.NextVersion(sessionId);
         var idempotencyKey = ids.NewGuid();
         var generatedAt = clock.UtcNow;

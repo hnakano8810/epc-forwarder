@@ -17,6 +17,7 @@ public sealed class ShipmentReconciler(
 
         session.SetExpectedCount(expectedCount);
         var received = readings.CountUnique(sessionId);
+        // PoC assumption: ReachabilityResult.Missing can be negative on over-delivery and feedback is still sent.
         var result = new ReachabilityResult(expectedCount, received);
 
         if (!result.IsMatch)

@@ -28,6 +28,7 @@ public interface IProductCatalog
     string? ResolveSku(int tenantId, string searchKey);
 }
 
+/// <param name="ItemCount">Count of distinct SKU lines in the aggregated payload (not total units).</param>
 public sealed record SnapshotRecord(Guid SessionId, int Version, bool IsFinal, Guid IdempotencyKey, int ItemCount, bool Success);
 
 public interface ISnapshotStore
