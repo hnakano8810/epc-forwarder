@@ -15,10 +15,12 @@ public sealed class CachingSecretStore(ISecretStore inner, IClock clock, TimeSpa
             return entry.Value;
         }
 
+        // Concurrent misses are benign: both callers fetch and the last write wins.
+        var fetchedAt = clock.UtcNow;
         var value = await inner.GetAsync(name, ct);
         if (value is not null)
         {
-            _cache[name] = (value, clock.UtcNow.Add(ttl));
+            _cache[name] = (value, fetchedAt.Add(ttl));
         }
 
         return value;

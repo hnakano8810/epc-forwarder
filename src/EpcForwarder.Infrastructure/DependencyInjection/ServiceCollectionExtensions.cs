@@ -20,6 +20,8 @@ public static class ServiceCollectionExtensions
     /// <summary>SQL永続化＋アダプタ＋Coreサービスを1つのオブジェクトグラフとして登録する。</summary>
     public static IServiceCollection AddEpcForwarder(this IServiceCollection services, EpcForwarderOptions options)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(options.SqlConnectionString);
+
         // 永続化(4ポート)
         services.AddSqlPersistence(options.SqlConnectionString);
 
@@ -28,7 +30,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IIdGenerator, GuidIdGenerator>();
         services.AddSingleton<IHostResolver, DnsHostResolver>();
         services.AddSingleton<IDeviceFeedback, NullDeviceFeedback>();
-        services.AddSingleton(new HttpClient());
+        services.AddSingleton(new HttpClient()); // TODO: replace with IHttpClientFactory in the Functions host (③b)
         services.AddSingleton<IWebhookSender, HttpWebhookSender>();
 
         // シークレット: (Key Vault or Null) を TTL キャッシュで包む

@@ -55,6 +55,20 @@ public class CachingSecretStoreTests
     }
 
     [Fact]
+    public async Task GetAsync_AtExactlyTtl_Refetches()
+    {
+        var inner = new CountingInner();
+        var clock = new MutableClock(DateTimeOffset.UnixEpoch);
+        var sut = new CachingSecretStore(inner, clock, TimeSpan.FromMinutes(5));
+
+        await sut.GetAsync("s");
+        clock.UtcNow = clock.UtcNow.AddMinutes(5); // exactly at expiry
+        await sut.GetAsync("s");
+
+        Assert.Equal(2, inner.Calls);
+    }
+
+    [Fact]
     public async Task GetAsync_DoesNotCacheNull()
     {
         var inner = new CountingInner { Value = null };
