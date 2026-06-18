@@ -80,10 +80,13 @@ public sealed class CapturingWebhookSender : IWebhookSender
 {
     public WebhookRequest? Last { get; private set; }
     public int SendCount { get; private set; }
+    public List<WebhookRequest> Requests { get; } = new();
     public WebhookResult Next { get; set; } = new(true, 200);
+
     public Task<WebhookResult> SendAsync(WebhookRequest request, CancellationToken ct = default)
     {
         Last = request;
+        Requests.Add(request);
         SendCount++;
         return Task.FromResult(Next);
     }
