@@ -15,6 +15,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{CD0E43AB
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EpcForwarder.Core.Tests", "tests\EpcForwarder.Core.Tests\EpcForwarder.Core.Tests.csproj", "{DAE7940B-2086-4504-A389-13AC6870C076}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EpcForwarder.Infrastructure.Tests", "tests\EpcForwarder.Infrastructure.Tests\EpcForwarder.Infrastructure.Tests.csproj", "{59ACF70B-505F-4AF4-94A6-FD27D5B12C4A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -40,11 +42,16 @@ Global
 		{DAE7940B-2086-4504-A389-13AC6870C076}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DAE7940B-2086-4504-A389-13AC6870C076}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{DAE7940B-2086-4504-A389-13AC6870C076}.Release|Any CPU.Build.0 = Release|Any CPU
+		{59ACF70B-505F-4AF4-94A6-FD27D5B12C4A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{59ACF70B-505F-4AF4-94A6-FD27D5B12C4A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{59ACF70B-505F-4AF4-94A6-FD27D5B12C4A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{59ACF70B-505F-4AF4-94A6-FD27D5B12C4A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{0EC171F6-EC6C-4174-86CA-5F375FC84FE1} = {F6853034-ADA6-4FD0-801F-CB1BD0B05CDA}
 		{8E7783F7-E4D7-455C-9B79-8039670BEF90} = {F6853034-ADA6-4FD0-801F-CB1BD0B05CDA}
 		{971FC64A-40A0-4FCD-A1D6-01936948C7B8} = {F6853034-ADA6-4FD0-801F-CB1BD0B05CDA}
 		{DAE7940B-2086-4504-A389-13AC6870C076} = {CD0E43AB-332A-4CA0-9150-D0C28A5A44F6}
+		{59ACF70B-505F-4AF4-94A6-FD27D5B12C4A} = {CD0E43AB-332A-4CA0-9150-D0C28A5A44F6}
 	EndGlobalSection
 EndGlobal
