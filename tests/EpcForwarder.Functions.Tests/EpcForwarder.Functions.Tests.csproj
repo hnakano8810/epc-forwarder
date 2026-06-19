@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\EpcForwarder.Functions\EpcForwarder.Functions.csproj" />
+    <ProjectReference Include="..\EpcForwarder.Core.Tests\EpcForwarder.Core.Tests.csproj" />
   </ItemGroup>
 
   <ItemGroup>
