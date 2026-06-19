@@ -1,6 +1,7 @@
 // tests/EpcForwarder.Core.Tests/Fakes/InMemoryFakes.cs
 using System.Collections.Concurrent;
 using EpcForwarder.Core.Abstractions;
+using EpcForwarder.Core.Delivery;
 using EpcForwarder.Core.Sessions;
 
 namespace EpcForwarder.Core.Tests.Fakes;
@@ -100,4 +101,16 @@ public sealed class CapturingDeviceFeedback : IDeviceFeedback
         Sent.Add((sessionId, result));
         return Task.CompletedTask;
     }
+}
+
+public sealed class FakeDestinationCatalog : IDestinationCatalog
+{
+    private readonly Dictionary<int, List<DeliveryTarget>> _map = new();
+    public void Add(int tenantId, DeliveryTarget target)
+    {
+        if (!_map.TryGetValue(tenantId, out var list)) { list = new(); _map[tenantId] = list; }
+        list.Add(target);
+    }
+    public IReadOnlyList<DeliveryTarget> GetActiveTargets(int tenantId) =>
+        _map.TryGetValue(tenantId, out var list) ? list : Array.Empty<DeliveryTarget>();
 }
