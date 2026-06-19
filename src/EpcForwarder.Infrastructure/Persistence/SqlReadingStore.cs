@@ -21,6 +21,7 @@ public sealed class SqlReadingStore(SqlConnectionFactory factory) : IReadingStor
             WHEN NOT MATCHED THEN INSERT
                (session_id, tenant_id, epc, search_key, device_id, read_at, location_l1, location_l2, location_l3)
                VALUES (@SessionId,
+                       -- Session は ReadingIngestor.Ingest が存在保証済み。未存在なら NOT NULL 違反で fail-fast(正しい挙動)。
                        (SELECT tenant_id FROM dbo.session WHERE public_id = @SessionId),
                        @Epc, @SearchKey, @DeviceId, @ReadAt, @L1, @L2, @L3);
             """,

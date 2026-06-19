@@ -24,12 +24,17 @@ public sealed class SqlReadingStoreLocationTests(SqlServerFixture fx)
         var loc = new ReadLocation("TOKYO-DC", "2F", "A-01");
         readings.Upsert(id, new ReadingEntry("302DB42318A0038000001231", null, "devA", now, loc));
 
-        var stored = Assert.Single(readings.List(id));
+        var stored = Assert.Single(readings.List(id).Where(r => r.Epc.EndsWith("1231")));
         Assert.Equal(loc, stored.Location);
+
+        // location 未指定は null のまま round-trip する
+        readings.Upsert(id, new ReadingEntry("302DB42318A0038000001232", null, "devB", now, null));
+        var noLoc = Assert.Single(readings.List(id).Where(r => r.Epc.EndsWith("1232")));
+        Assert.Null(noLoc.Location);
 
         using var conn = factory.Create();
         var tenant = conn.ExecuteScalar<int>(
-            "SELECT tenant_id FROM dbo.reading WHERE session_id = @id", new { id });
+            "SELECT TOP 1 tenant_id FROM dbo.reading WHERE session_id = @id", new { id });
         Assert.NotEqual(0, tenant);
     }
 }
