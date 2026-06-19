@@ -8,6 +8,7 @@ namespace EpcForwarder.Core.Query;
 /// 端末向け読取モデル。tenant スコープで session を解決し、読取実績から集約ビューを生成する。
 /// 解決ロジックは SnapshotPublisher と同一(SearchKey null またはマスタ未登録は未知タグ)。
 /// session 不在 or tenant 不一致は null を返す(呼び出し側で 404)。
+/// 注: GetSummary と GetUnknown はそれぞれ readings.List を1回呼ぶ。両方必要なリクエストでは2回走る(PoCでは許容)。
 /// </summary>
 public sealed class SessionQueryService(
     ISessionStore sessions,

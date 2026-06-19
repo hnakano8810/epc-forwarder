@@ -25,6 +25,7 @@ public sealed record LocationSummaryView(
 public sealed record ReconciliationView(Guid SessionId, int? Expected, int Received)
 {
     public bool? IsMatch => Expected is null ? null : Expected == Received;
+    /// <summary>不足数(Expected-Received)。負値は超過(余分に読取)を表す。Expected 未設定時は null。</summary>
     public int? Missing => Expected is null ? null : Expected - Received;
 }
 
