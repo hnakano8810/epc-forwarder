@@ -31,7 +31,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IIdGenerator, GuidIdGenerator>();
         services.AddSingleton<IHostResolver, DnsHostResolver>();
         services.AddSingleton<IDeviceFeedback, NullDeviceFeedback>();
-        services.AddSingleton(new HttpClient()); // TODO: replace with IHttpClientFactory in the Functions host (③b)
+        services.AddHttpClient(HttpWebhookSender.ClientName);
         services.AddSingleton<IWebhookSender, HttpWebhookSender>();
 
         // シークレット: (Key Vault or Null) を TTL キャッシュで包む

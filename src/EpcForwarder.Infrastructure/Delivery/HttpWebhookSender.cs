@@ -6,10 +6,13 @@ using EpcForwarder.Core.Abstractions;
 namespace EpcForwarder.Infrastructure.Delivery;
 
 /// <summary>IWebhookSender の実HTTP実装。URLガードは上位(アプリ層)で実施済みの前提。</summary>
-public sealed class HttpWebhookSender(HttpClient client) : IWebhookSender
+public sealed class HttpWebhookSender(IHttpClientFactory factory) : IWebhookSender
 {
+    public const string ClientName = "webhook";
+
     public async Task<WebhookResult> SendAsync(WebhookRequest request, CancellationToken ct = default)
     {
+        var client = factory.CreateClient(ClientName);
         using var message = new HttpRequestMessage(new HttpMethod(request.Method), request.Url);
 
         var contentType = request.Headers.TryGetValue("Content-Type", out var ctv)

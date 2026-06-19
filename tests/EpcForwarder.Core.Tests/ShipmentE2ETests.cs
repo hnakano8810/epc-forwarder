@@ -48,7 +48,7 @@ public class ShipmentE2ETests
 
         var ingestor = new ReadingIngestor(sessions, readings, clock);
         var reconciler = new ShipmentReconciler(sessions, readings, new CapturingDeviceFeedback(), clock);
-        var publisher = new SnapshotPublisher(readings, products, snapshots, new HttpWebhookSender(http), secrets, new PayloadBuilder(), clock, ids);
+        var publisher = new SnapshotPublisher(readings, products, snapshots, new HttpWebhookSender(new SingleClientHttpClientFactory(http)), secrets, new PayloadBuilder(), clock, ids);
         var deliverer = new ShipmentDeliverer(sessions, publisher, clock);
 
         const string epcA = "302DB42318A0038000001231";

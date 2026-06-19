@@ -1,5 +1,6 @@
 // tests/EpcForwarder.Core.Tests/Fakes/InMemoryFakes.cs
 using System.Collections.Concurrent;
+using System.Net.Http;
 using EpcForwarder.Core.Abstractions;
 using EpcForwarder.Core.Delivery;
 using EpcForwarder.Core.Sessions;
@@ -113,4 +114,9 @@ public sealed class FakeDestinationCatalog : IDestinationCatalog
     }
     public IReadOnlyList<DeliveryTarget> GetActiveTargets(int tenantId) =>
         _map.TryGetValue(tenantId, out var list) ? list : Array.Empty<DeliveryTarget>();
+}
+
+public sealed class SingleClientHttpClientFactory(HttpClient client) : IHttpClientFactory
+{
+    public HttpClient CreateClient(string name) => client;
 }

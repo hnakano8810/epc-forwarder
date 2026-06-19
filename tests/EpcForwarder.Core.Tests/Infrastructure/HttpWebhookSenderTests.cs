@@ -2,6 +2,7 @@
 using System.Net;
 using System.Text;
 using EpcForwarder.Core.Abstractions;
+using EpcForwarder.Core.Tests.Fakes;
 using EpcForwarder.Infrastructure.Delivery;
 using Xunit;
 
@@ -30,7 +31,7 @@ public class HttpWebhookSenderTests
         });
 
         using var client = new HttpClient();
-        var sut = new HttpWebhookSender(client);
+        var sut = new HttpWebhookSender(new SingleClientHttpClientFactory(client));
         var headers = new Dictionary<string, string>
         {
             ["Content-Type"] = "application/json; charset=utf-8",
