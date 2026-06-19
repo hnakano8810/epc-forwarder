@@ -103,3 +103,25 @@ MQTTはpub/sub（投げっぱなし）で**同期レスポンスを持たない*
 ### 未決（実装時に確定）
 1. 端末→APIの認証方式の確定（PoC: Functionsキー / 本番: AAD・デバイストークン）。
 2. ロケ別明細のページング（ロケ数・SKU数が多い倉庫）。
+
+---
+
+## 実装メモ（③b-2）
+
+クエリAPI＋棚卸HTTPトリガーを Azure Functions（ASP.NET Core 統合）で実装。
+
+| メソッド/パス | 関数名 | 実装 |
+|---|---|---|
+| `GET /api/sessions/{publicId}/summary` | `GetSummary` | `SessionQueryService.GetSummary` |
+| `GET /api/sessions/{publicId}/summary?groupBy=location` | `GetSummary` | `SessionQueryService.GetLocationSummary` |
+| `GET /api/sessions/{publicId}/reconciliation` | `GetReconciliation` | `SessionQueryService.GetReconciliation` |
+| `GET /api/sessions/{publicId}/unknown` | `GetUnknown` | `SessionQueryService.GetUnknown` |
+| `POST /api/sessions/{publicId}/inventory/provisional` | `InventoryProvisional` | `InventoryDispatcher.SendProvisionalAsync` |
+| `POST /api/sessions/{publicId}/inventory/finalize` | `InventoryFinalize` | `InventoryDispatcher.FinalizeAndDeliverAsync` |
+
+- **認可（PoC）**: `AuthorizationLevel.Function`（Functionsキー）。テナントは `X-EPCF-Tenant` ヘッダで受け、`session.tenant_id` と突合。不一致/不在は **404**（他テナントのセッション存在を秘匿）。ヘッダ欠落/不正・不正な publicId（空GUID）は **400**。本番は AAD/デバイストークンへ。
+- **読取モデル**: 新SQLを足さず Core `SessionQueryService` が既存ポート（`IReadingStore`/`IProductCatalog`/`SkuAggregator`）で集約。SnapshotPublisher と同一の解決ロジックのため、端末 summary と配信ペイロードが一致。
+- **棚卸状態不正**: 仮確定で open でない、確定で既 forwarded の場合は **409**。
+- **有効宛先なし**: `delivered=false` で **200**（配信は行われない）。
+- **既知の follow-up**: HTTP棚卸トリガーの `catch(InvalidOperationException)→409` は、`SnapshotPublisher` の設定エラー（secret/HMAC 未設定）も 409 にしてしまう（本来 500 相当）。Core に専用例外型を導入して切り分けるのが将来課題。
+- **PoC 制約**: 複数宛先のファンアウト未対応（先頭のみ）。ロケ別 summary のページングは未対応（§5 未決2）。未知タグはロケ別ビューには含めない（本体集約と同方針）。
