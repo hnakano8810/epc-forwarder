@@ -79,4 +79,67 @@ public class SessionQueryServiceTests
         var h = new Harness();
         Assert.Null(h.Build().GetSummary(tenantId: 1, sessionId: Guid.NewGuid()));
     }
+
+    [Fact]
+    public void GetReconciliation_ReturnsExpectedAndReceived()
+    {
+        var h = new Harness();
+        var (id, _) = Seed(h, SessionType.Shipment);
+        h.Sessions.Get(id)!.SetExpectedCount(5);
+
+        var view = h.Build().GetReconciliation(tenantId: 1, sessionId: id);
+
+        Assert.NotNull(view);
+        Assert.Equal(5, view!.Expected);
+        Assert.Equal(3, view.Received);     // 投入3件(解決2+未知1、いずれもユニーク)
+        Assert.Equal(2, view.Missing);
+        Assert.False(view.IsMatch);
+    }
+
+    [Fact]
+    public void GetReconciliation_NoExpectedYet_NullMatch()
+    {
+        var h = new Harness();
+        var (id, _) = Seed(h, SessionType.Shipment);
+
+        var view = h.Build().GetReconciliation(tenantId: 1, sessionId: id);
+
+        Assert.NotNull(view);
+        Assert.Null(view!.Expected);
+        Assert.Null(view.IsMatch);
+        Assert.Equal(3, view.Received);
+    }
+
+    [Fact]
+    public void GetLocationSummary_GroupsByLocation()
+    {
+        var h = new Harness();
+        var id = Guid.NewGuid();
+        h.Sessions.Save(new Session(id, 1, SessionType.Inventory, "INV-1", h.Clock.UtcNow));
+        const string epcA = "302DB42318A0038000001231";
+        const string epcB = "302DB42318A0038000009999"; // 同一SKU・別ロケ
+        var key = Sgtin96.DeriveSearchKey(epcA);
+        h.Products.Add(1, key, "ITEM-AAA");
+        var locA = new ReadLocation("DC", "2F", "A-01");
+        var locB = new ReadLocation("DC", "2F", "A-02");
+        h.Readings.Upsert(id, new ReadingEntry(epcA, key, "devA", h.Clock.UtcNow, locA));
+        h.Readings.Upsert(id, new ReadingEntry(epcB, key, "devA", h.Clock.UtcNow, locB));
+
+        var view = h.Build().GetLocationSummary(tenantId: 1, sessionId: id);
+
+        Assert.NotNull(view);
+        Assert.Equal("inventory", view!.Type);
+        Assert.Equal(2, view.Locations.Count);
+        var a01 = Assert.Single(view.Locations, g => g.Location.L3 == "A-01");
+        Assert.Equal(1, a01.TotalQuantity);
+        Assert.Equal("ITEM-AAA", Assert.Single(a01.Items).Sku);
+    }
+
+    [Fact]
+    public void GetReconciliation_TenantMismatch_ReturnsNull()
+    {
+        var h = new Harness();
+        var (id, _) = Seed(h, SessionType.Shipment);
+        Assert.Null(h.Build().GetReconciliation(tenantId: 2, sessionId: id));
+    }
 }

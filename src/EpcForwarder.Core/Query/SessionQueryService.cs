@@ -47,6 +47,50 @@ public sealed class SessionQueryService(
         return new UnknownView(sessionId, unknown.Count, unknown);
     }
 
+    public ReconciliationView? GetReconciliation(int tenantId, Guid sessionId)
+    {
+        var session = ResolveSession(tenantId, sessionId);
+        if (session is null)
+        {
+            return null;
+        }
+
+        return new ReconciliationView(sessionId, session.ExpectedCount, readings.CountUnique(sessionId));
+    }
+
+    public LocationSummaryView? GetLocationSummary(int tenantId, Guid sessionId)
+    {
+        var session = ResolveSession(tenantId, sessionId);
+        if (session is null)
+        {
+            return null;
+        }
+
+        var groups = new List<LocationGroup>();
+        // ロケ単位に分け、各ロケ内で SKU 集約(未知タグはロケ別ビューには含めない=本体集約と同方針)。
+        foreach (var grp in readings.List(sessionId).GroupBy(r => r.Location ?? new ReadLocation(null, null, null)))
+        {
+            var resolved = new List<string>();
+            foreach (var entry in grp)
+            {
+                var sku = entry.SearchKey is null ? null : products.ResolveSku(tenantId, entry.SearchKey);
+                if (sku is not null)
+                {
+                    resolved.Add(sku);
+                }
+            }
+
+            var items = SkuAggregator.Aggregate(resolved).Select(a => new SummaryItem(a.Sku, a.Quantity)).ToList();
+            groups.Add(new LocationGroup(grp.Key, resolved.Count, items));
+        }
+
+        return new LocationSummaryView(
+            sessionId,
+            session.Type.ToString().ToLowerInvariant(),
+            groups,
+            clock.UtcNow);
+    }
+
     private Session? ResolveSession(int tenantId, Guid sessionId)
     {
         var session = sessions.Get(sessionId);
