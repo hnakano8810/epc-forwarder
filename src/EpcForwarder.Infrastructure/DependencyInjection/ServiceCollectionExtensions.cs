@@ -4,7 +4,9 @@ using Azure.Security.KeyVault.Secrets;
 using EpcForwarder.Core.Abstractions;
 using EpcForwarder.Core.Delivery;
 using EpcForwarder.Core.Ingestion;
+using EpcForwarder.Core.Inventory;
 using EpcForwarder.Core.Products;
+using EpcForwarder.Core.Query;
 using EpcForwarder.Core.Sessions;
 using EpcForwarder.Infrastructure.Delivery;
 using EpcForwarder.Infrastructure.Messaging;
@@ -52,6 +54,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<InventoryDeliverer>();
         services.AddSingleton<ProductRegistrar>();
         services.AddSingleton<IngestionDispatcher>();
+        services.AddSingleton<SessionQueryService>();
+        services.AddSingleton<InventoryDispatcher>();
 
         return services;
     }
