@@ -17,6 +17,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EpcForwarder.Core.Tests", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EpcForwarder.Infrastructure.Tests", "tests\EpcForwarder.Infrastructure.Tests\EpcForwarder.Infrastructure.Tests.csproj", "{59ACF70B-505F-4AF4-94A6-FD27D5B12C4A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EpcForwarder.Functions.Tests", "tests\EpcForwarder.Functions.Tests\EpcForwarder.Functions.Tests.csproj", "{CD31B107-725C-48F7-AFB5-7DE5AE22C70C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -46,6 +48,10 @@ Global
 		{59ACF70B-505F-4AF4-94A6-FD27D5B12C4A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{59ACF70B-505F-4AF4-94A6-FD27D5B12C4A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{59ACF70B-505F-4AF4-94A6-FD27D5B12C4A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CD31B107-725C-48F7-AFB5-7DE5AE22C70C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CD31B107-725C-48F7-AFB5-7DE5AE22C70C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CD31B107-725C-48F7-AFB5-7DE5AE22C70C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CD31B107-725C-48F7-AFB5-7DE5AE22C70C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{0EC171F6-EC6C-4174-86CA-5F375FC84FE1} = {F6853034-ADA6-4FD0-801F-CB1BD0B05CDA}
@@ -53,5 +59,6 @@ Global
 		{971FC64A-40A0-4FCD-A1D6-01936948C7B8} = {F6853034-ADA6-4FD0-801F-CB1BD0B05CDA}
 		{DAE7940B-2086-4504-A389-13AC6870C076} = {CD0E43AB-332A-4CA0-9150-D0C28A5A44F6}
 		{59ACF70B-505F-4AF4-94A6-FD27D5B12C4A} = {CD0E43AB-332A-4CA0-9150-D0C28A5A44F6}
+		{CD31B107-725C-48F7-AFB5-7DE5AE22C70C} = {CD0E43AB-332A-4CA0-9150-D0C28A5A44F6}
 	EndGlobalSection
 EndGlobal

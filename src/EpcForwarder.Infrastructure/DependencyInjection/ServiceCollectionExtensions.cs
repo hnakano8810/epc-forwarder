@@ -3,6 +3,7 @@ using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
 using EpcForwarder.Core.Abstractions;
 using EpcForwarder.Core.Delivery;
+using EpcForwarder.Core.Ingestion;
 using EpcForwarder.Core.Products;
 using EpcForwarder.Core.Sessions;
 using EpcForwarder.Infrastructure.Delivery;
@@ -30,7 +31,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IIdGenerator, GuidIdGenerator>();
         services.AddSingleton<IHostResolver, DnsHostResolver>();
         services.AddSingleton<IDeviceFeedback, NullDeviceFeedback>();
-        services.AddSingleton(new HttpClient()); // TODO: replace with IHttpClientFactory in the Functions host (③b)
+        services.AddHttpClient(HttpWebhookSender.ClientName);
         services.AddSingleton<IWebhookSender, HttpWebhookSender>();
 
         // シークレット: (Key Vault or Null) を TTL キャッシュで包む
@@ -50,6 +51,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ShipmentDeliverer>();
         services.AddSingleton<InventoryDeliverer>();
         services.AddSingleton<ProductRegistrar>();
+        services.AddSingleton<IngestionDispatcher>();
 
         return services;
     }

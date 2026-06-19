@@ -1,6 +1,7 @@
 // tests/EpcForwarder.Infrastructure.Tests/Composition/AddEpcForwarderTests.cs
 using EpcForwarder.Core.Abstractions;
 using EpcForwarder.Core.Delivery;
+using EpcForwarder.Core.Ingestion;
 using EpcForwarder.Core.Products;
 using EpcForwarder.Core.Sessions;
 using EpcForwarder.Infrastructure.DependencyInjection;
@@ -37,6 +38,7 @@ public class AddEpcForwarderTests
     [InlineData(typeof(IHostResolver))]
     [InlineData(typeof(IDeviceFeedback))]
     [InlineData(typeof(EpcForwarder.Core.Abstractions.IDestinationCatalog))]
+    [InlineData(typeof(IngestionDispatcher))]
     public void Resolves_AllPrimaryServices(Type serviceType)
     {
         using var sp = Build();

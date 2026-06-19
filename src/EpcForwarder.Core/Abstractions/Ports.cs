@@ -19,8 +19,11 @@ public interface ISessionStore
     void Save(Session session);
 }
 
+/// <summary>読取に付随するロケーション文脈(棚卸のロケ別集計に使用)。全要素任意。</summary>
+public sealed record ReadLocation(string? L1, string? L2, string? L3);
+
 /// <summary>1セッション内の読取1件。EPC単位で後勝ち。</summary>
-public sealed record ReadingEntry(string Epc, string? SearchKey, string? DeviceId, DateTimeOffset ReadAt);
+public sealed record ReadingEntry(string Epc, string? SearchKey, string? DeviceId, DateTimeOffset ReadAt, ReadLocation? Location = null);
 
 public interface IReadingStore
 {
