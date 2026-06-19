@@ -23,16 +23,24 @@ public static class IngestionMessageParser
         };
     }
 
-    private static ReadCommand ToRead(ReadMessage m) => new(
-        m.Tenant,
-        m.SessionId,
-        m.BusinessKey,
-        Enum.Parse<SessionType>(m.SessionType, ignoreCase: true),
-        m.ResolveSku,
-        m.Epc,
-        m.DeviceId,
-        m.Location is null ? null : new ReadLocation(m.Location.L1, m.Location.L2, m.Location.L3),
-        m.ReadAt);
+    private static ReadCommand ToRead(ReadMessage m)
+    {
+        if (!Enum.TryParse<SessionType>(m.SessionType, ignoreCase: true, out var sessionType))
+        {
+            throw new FormatException($"Unknown session_type: '{m.SessionType}'.");
+        }
+
+        return new ReadCommand(
+            m.Tenant,
+            m.SessionId,
+            m.BusinessKey,
+            sessionType,
+            m.ResolveSku,
+            m.Epc,
+            m.DeviceId,
+            m.Location is null ? null : new ReadLocation(m.Location.L1, m.Location.L2, m.Location.L3),
+            m.ReadAt);
+    }
 
     private static CompleteCommand ToComplete(CompleteMessage m) => new(m.Tenant, m.SessionId, m.ExpectedCount);
 }

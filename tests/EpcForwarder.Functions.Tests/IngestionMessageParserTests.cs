@@ -26,6 +26,9 @@ public class IngestionMessageParserTests
         Assert.Equal("handy-07", cmd.DeviceId);
         Assert.Equal("TOKYO-DC", cmd.Location!.L1);
         Assert.Equal("A-01", cmd.Location!.L3);
+        Assert.Equal("DN-1", cmd.BusinessKey);
+        Assert.Equal("2F", cmd.Location!.L2);
+        Assert.Equal(DateTimeOffset.Parse("2026-06-18T12:30:01Z"), cmd.ReadAt);
     }
 
     [Fact]
@@ -43,5 +46,15 @@ public class IngestionMessageParserTests
     public void Parse_UnknownKind_Throws()
     {
         Assert.Throws<FormatException>(() => IngestionMessageParser.Parse("""{"kind":"bogus"}"""));
+    }
+
+    [Fact]
+    public void Parse_Read_BadSessionType_ThrowsFormatException()
+    {
+        const string json = """
+        {"kind":"read","tenant":1,"session_id":"9c3a8f10-0000-0000-0000-000000000001",
+         "session_type":"unknown_type","resolve_sku":false,"epc":"302DB42318A0038000001231","read_at":"2026-06-18T12:30:01Z"}
+        """;
+        Assert.Throws<FormatException>(() => IngestionMessageParser.Parse(json));
     }
 }
