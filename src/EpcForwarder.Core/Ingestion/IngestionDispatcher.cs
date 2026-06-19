@@ -16,11 +16,6 @@ public sealed class IngestionDispatcher(
     IDestinationCatalog destinations,
     IClock clock)
 {
-    // Task 4 で CompleteAsync が利用する。一次コンストラクターの警告抑制を兼ねてフィールド化。
-    private readonly ShipmentReconciler _reconciler = reconciler;
-    private readonly ShipmentDeliverer _deliverer = deliverer;
-    private readonly IDestinationCatalog _destinations = destinations;
-
     public void IngestRead(ReadCommand cmd)
     {
         // 遅延生成: 未知セッションはメッセージのメタデータで作成(既存は触らない)。
@@ -30,5 +25,28 @@ public sealed class IngestionDispatcher(
         }
 
         ingestor.Ingest(cmd.SessionId, cmd.Epc, cmd.DeviceId, cmd.ReadAt, cmd.ResolveSku, cmd.Location);
+    }
+
+    /// <summary>
+    /// 伝票完了。到達性を突合し、一致時のみ有効な宛先(先頭)へ確定配信する。
+    /// PoC: 複数宛先のファンアウトは未対応(ShipmentDeliverer がセッション単位で1回 forwarded にするため先頭のみ)。
+    /// 不一致時は ShipmentReconciler が再読取フィードバックを送る(本メソッドは配信しない)。
+    /// </summary>
+    public async Task<CompletionOutcome> CompleteAsync(CompleteCommand cmd, CancellationToken ct = default)
+    {
+        var reachability = await reconciler.CompleteAsync(cmd.SessionId, cmd.ExpectedCount, ct);
+        if (!reachability.IsMatch)
+        {
+            return new CompletionOutcome(reachability, Delivered: false, Delivery: null);
+        }
+
+        var target = destinations.GetActiveTargets(cmd.Tenant).FirstOrDefault();
+        if (target is null)
+        {
+            return new CompletionOutcome(reachability, Delivered: false, Delivery: null);
+        }
+
+        var delivery = await deliverer.FinalizeAndDeliverAsync(cmd.SessionId, target, ct);
+        return new CompletionOutcome(reachability, Delivered: true, Delivery: delivery);
     }
 }
