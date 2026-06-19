@@ -97,4 +97,26 @@ public class SessionQueryApiTests
         var result = api.GetUnknown(Request(tenant: 2), id);
         Assert.IsType<NotFoundResult>(result);
     }
+
+    [Fact]
+    public void GetReconciliation_WrongTenant_ReturnsNotFound()
+    {
+        var (api, id) = BuildWithSession(tenantId: 1);
+        Assert.IsType<NotFoundResult>(api.GetReconciliation(Request(tenant: 2), id));
+    }
+
+    [Fact]
+    public void GetUnknown_ValidTenant_ReturnsOk()
+    {
+        var (api, id) = BuildWithSession();
+        var ok = Assert.IsType<OkObjectResult>(api.GetUnknown(Request(tenant: 1), id));
+        Assert.IsType<UnknownDto>(ok.Value);
+    }
+
+    [Fact]
+    public void GetSummary_EmptyGuid_ReturnsBadRequest()
+    {
+        var (api, _) = BuildWithSession();
+        Assert.IsType<BadRequestObjectResult>(api.GetSummary(Request(tenant: 1), Guid.Empty));
+    }
 }
