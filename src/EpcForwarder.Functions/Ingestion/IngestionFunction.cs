@@ -25,7 +25,9 @@ public sealed class IngestionFunction(IngestionDispatcher dispatcher, ILogger<In
             catch (Exception ex) when (ex is FormatException or System.Text.Json.JsonException)
             {
                 // PoC: 不正メッセージはログのみ(at-least-once 再処理での毒メッセージ防止)。
-                logger.LogWarning(ex, "Skipping malformed ingestion message.");
+                // 全文/PIIを出さないよう先頭120文字に切り詰めたプレビューのみ記録。
+                var preview = raw.Length > 120 ? raw[..120] + "…" : raw;
+                logger.LogWarning(ex, "Skipping malformed ingestion message (preview={Preview}).", preview);
                 continue;
             }
 
@@ -39,6 +41,9 @@ public sealed class IngestionFunction(IngestionDispatcher dispatcher, ILogger<In
                     logger.LogInformation(
                         "Completion session={SessionId} expected={Expected} received={Received} delivered={Delivered}",
                         complete.SessionId, outcome.Reachability.Expected, outcome.Reachability.Received, outcome.Delivered);
+                    break;
+                default:
+                    logger.LogWarning("Unhandled ingestion command type {Type}.", command.GetType().Name);
                     break;
             }
         }
