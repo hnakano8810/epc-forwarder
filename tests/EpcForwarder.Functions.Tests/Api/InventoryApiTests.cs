@@ -62,6 +62,38 @@ public class InventoryApiTests
         var ok = Assert.IsType<OkObjectResult>(result);
         var dto = Assert.IsType<InventoryResultDto>(ok.Value);
         Assert.True(dto.Delivered);
+        Assert.Equal(200, dto.StatusCode);
+    }
+
+    [Fact]
+    public async Task Finalize_Valid_ReturnsOkDelivered()
+    {
+        var ctx = new Ctx();
+        ctx.Destinations.Add(1, new DeliveryTarget("https://x.test/h", "POST", "1", false, null, new Dictionary<string, string>()));
+        var api = ctx.Build();
+        var id = OpenInventory(ctx);
+
+        var result = await api.Finalize(Request(1), id);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var dto = Assert.IsType<InventoryResultDto>(ok.Value);
+        Assert.True(dto.Delivered);
+        Assert.Equal(SessionStatus.Forwarded, ctx.Sessions.Get(id)!.Status);
+    }
+
+    [Fact]
+    public async Task Provisional_NoActiveTarget_ReturnsOkNotDelivered()
+    {
+        var ctx = new Ctx(); // 宛先未登録
+        var api = ctx.Build();
+        var id = OpenInventory(ctx);
+
+        var result = await api.SendProvisional(Request(1), id);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var dto = Assert.IsType<InventoryResultDto>(ok.Value);
+        Assert.False(dto.Delivered);
+        Assert.Null(dto.StatusCode);
     }
 
     [Fact]
