@@ -101,4 +101,30 @@ public class InventoryDispatcherTests
         var d = h.Build();
         Assert.Null(await d.FinalizeAndDeliverAsync(tenantId: 1, sessionId: Guid.NewGuid()));
     }
+
+    [Fact]
+    public async Task Finalize_AlreadyForwarded_ThrowsInvalidOperationException()
+    {
+        var h = new Harness();
+        h.Destinations.Add(1, Target("https://example.test/hook"));
+        var d = h.Build();
+        var id = OpenInventory(h);
+        await d.FinalizeAndDeliverAsync(tenantId: 1, sessionId: id); // 1回目: forwarded
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            d.FinalizeAndDeliverAsync(tenantId: 1, sessionId: id));
+    }
+
+    [Fact]
+    public async Task SendProvisional_AfterForwarded_ThrowsInvalidOperationException()
+    {
+        var h = new Harness();
+        h.Destinations.Add(1, Target("https://example.test/hook"));
+        var d = h.Build();
+        var id = OpenInventory(h);
+        await d.FinalizeAndDeliverAsync(tenantId: 1, sessionId: id); // forwarded にする
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            d.SendProvisionalAsync(tenantId: 1, sessionId: id)); // open でない→throw
+    }
 }

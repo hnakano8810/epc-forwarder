@@ -12,6 +12,8 @@ public sealed record InventoryPublishOutcome(bool Delivered, WebhookResult? Deli
 /// session 不在 or tenant 不一致は null(呼び出し側で 404)。
 /// 状態不正(仮確定: open でない / 確定: 既 forwarded)は InventoryDeliverer が InvalidOperationException を投げる(呼び出し側で 409)。
 /// PoC: 複数宛先のファンアウトは未対応(先頭のみ)。
+/// 注: 棚卸は意図的に非冪等。既 forwarded への再確定/仮確定は InvalidOperationException→409。
+/// (シップメント側 IngestionDispatcher は at-least-once 重複を透過的に成功扱いする点と異なる)
 /// </summary>
 public sealed class InventoryDispatcher(
     ISessionStore sessions,
