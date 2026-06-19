@@ -41,4 +41,6 @@
 - **複数宛先のファンアウト未対応**: `IDestinationCatalog.GetActiveTargets` の先頭のみへ配信(ShipmentDeliverer がセッション単位で1回 forwarded にするため)。
 - **棚卸の完了/仮確定は本経路ではない**: HTTP(③b-2)で起動。complete は伝票用。
 - **C2D 宛先デバイスID**: `IDeviceFeedback` がまだ宛先デバイスを運んでいない(③b 以降)。
+- **complete の tenant は信頼前提**: 宛先解決は complete メッセージの `tenant` で行い、セッション(read で作成)の tenant と突合しない。偽装 complete が別テナントの宛先を引く余地がある。本PoCは信頼された端末経路前提で許容(本番はトークン/テナント検証を導入)。
+- **重複 complete の戻り**: 既配信(forwarded)への再 complete は `Delivered=true` だが `Delivery=null`(新規送信なし)を返す冪等動作。
 - **トリガーのローカル実行不可**: EventHub バインディングは実 IoT Hub 必要。本PoCはビルド検証＋Dispatcher/パーサ/SQL の単体・統合テストまで。
