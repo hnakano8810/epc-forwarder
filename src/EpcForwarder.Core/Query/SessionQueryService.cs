@@ -73,7 +73,7 @@ public sealed class SessionQueryService(
             var resolved = new List<string>();
             foreach (var entry in grp)
             {
-                var sku = entry.SearchKey is null ? null : products.ResolveSku(tenantId, entry.SearchKey);
+                var sku = TryResolveSku(tenantId, entry);
                 if (sku is not null)
                 {
                     resolved.Add(sku);
@@ -103,7 +103,7 @@ public sealed class SessionQueryService(
         var unknown = new List<string>();
         foreach (var entry in entries)
         {
-            var sku = entry.SearchKey is null ? null : products.ResolveSku(tenantId, entry.SearchKey);
+            var sku = TryResolveSku(tenantId, entry);
             if (sku is null)
             {
                 unknown.Add(entry.Epc);
@@ -116,4 +116,7 @@ public sealed class SessionQueryService(
 
         return (resolved, unknown);
     }
+
+    private string? TryResolveSku(int tenantId, ReadingEntry entry) =>
+        entry.SearchKey is null ? null : products.ResolveSku(tenantId, entry.SearchKey);
 }

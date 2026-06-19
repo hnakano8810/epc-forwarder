@@ -142,4 +142,38 @@ public class SessionQueryServiceTests
         var (id, _) = Seed(h, SessionType.Shipment);
         Assert.Null(h.Build().GetReconciliation(tenantId: 2, sessionId: id));
     }
+
+    [Fact]
+    public void GetLocationSummary_TenantMismatch_ReturnsNull()
+    {
+        var h = new Harness();
+        var (id, _) = Seed(h, SessionType.Inventory);
+        Assert.Null(h.Build().GetLocationSummary(tenantId: 2, sessionId: id));
+    }
+
+    [Fact]
+    public void GetLocationSummary_UnknownSession_ReturnsNull()
+    {
+        var h = new Harness();
+        Assert.Null(h.Build().GetLocationSummary(tenantId: 1, sessionId: Guid.NewGuid()));
+    }
+
+    [Fact]
+    public void GetLocationSummary_NullLocation_GroupsUnderAllNull()
+    {
+        var h = new Harness();
+        var id = Guid.NewGuid();
+        h.Sessions.Save(new Session(id, 1, SessionType.Inventory, "INV-1", h.Clock.UtcNow));
+        const string epc = "302DB42318A0038000001231";
+        var key = Sgtin96.DeriveSearchKey(epc);
+        h.Products.Add(1, key, "ITEM-AAA");
+        h.Readings.Upsert(id, new ReadingEntry(epc, key, "devA", h.Clock.UtcNow, null)); // location なし
+
+        var view = h.Build().GetLocationSummary(tenantId: 1, sessionId: id);
+
+        Assert.NotNull(view);
+        var grp = Assert.Single(view!.Locations);
+        Assert.Equal(new ReadLocation(null, null, null), grp.Location);
+        Assert.Equal(1, grp.TotalQuantity);
+    }
 }
