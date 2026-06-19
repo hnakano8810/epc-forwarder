@@ -1,0 +1,2 @@
+# Bicep がコンパイルした ARM JSON 中間生成物(`az bicep build` を --stdout なしで実行した場合に生成)
+*.json
