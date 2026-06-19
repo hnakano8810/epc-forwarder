@@ -24,4 +24,8 @@
     <ProjectReference Include="..\..\src\EpcForwarder.Functions\EpcForwarder.Functions.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
 </Project>
