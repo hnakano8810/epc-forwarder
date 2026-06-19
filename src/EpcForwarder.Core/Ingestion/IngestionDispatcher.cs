@@ -40,6 +40,12 @@ public sealed class IngestionDispatcher(
             return new CompletionOutcome(reachability, Delivered: false, Delivery: null);
         }
 
+        // at-least-once 重複: 既に配信済みなら冪等に成功扱い(再 finalize で throw させない)。
+        if (sessions.Get(cmd.SessionId)?.Status == SessionStatus.Forwarded)
+        {
+            return new CompletionOutcome(reachability, Delivered: true, Delivery: null);
+        }
+
         var target = destinations.GetActiveTargets(cmd.Tenant).FirstOrDefault();
         if (target is null)
         {

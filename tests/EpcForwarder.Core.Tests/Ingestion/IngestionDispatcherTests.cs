@@ -118,5 +118,24 @@ public class IngestionDispatcherTests
         Assert.True(outcome.Reachability.IsMatch);
         Assert.False(outcome.Delivered);
         Assert.Equal(0, h.Sender.SendCount);
+        Assert.NotEqual(SessionStatus.Forwarded, h.Sessions.Get(id)!.Status);
+    }
+
+    [Fact]
+    public async Task Complete_AlreadyForwarded_IsIdempotent_NoSecondSend_NoThrow()
+    {
+        var h = new Harness();
+        h.Destinations.Add(1, Target("https://example.test/hook"));
+        var d = h.Build();
+        var id = Guid.NewGuid();
+
+        d.IngestRead(Read(id, "302DB42318A0038000001231"));
+        await d.CompleteAsync(new CompleteCommand(1, id, ExpectedCount: 1));   // 1回目: 配信
+
+        var second = await d.CompleteAsync(new CompleteCommand(1, id, ExpectedCount: 1)); // 重複
+
+        Assert.True(second.Delivered);
+        Assert.Equal(1, h.Sender.SendCount);   // 2回目は送らない
+        Assert.Equal(SessionStatus.Forwarded, h.Sessions.Get(id)!.Status);
     }
 }
