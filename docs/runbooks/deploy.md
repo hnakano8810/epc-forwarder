@@ -39,7 +39,7 @@ echo "FUNC=$FUNC KV=$KV IOT=$IOT SQLFQDN=$SQLFQDN DB=$SQLDB"
 ## 3. IoT Hub の EventHub 互換接続文字列を Key Vault へ投入
 ```bash
 # 組込みエンドポイント(events)の EH 互換接続文字列を取得
-IOT_EH_CONN=$(az iot hub connection-string show --hub-name "$IOT" --default-eventhub -o tsv)
+IOT_EH_CONN=$(az iot hub connection-string show -g "$RG" --hub-name "$IOT" --default-eventhub -o tsv)
 # Key Vault のプレースホルダ・シークレットを実値で上書き
 az keyvault secret set --vault-name "$KV" --name IoTHubEventHubConnection --value "$IOT_EH_CONN" -o none
 echo "IoTHubEventHubConnection set."
@@ -64,7 +64,7 @@ sqlcmd -S "tcp:$SQLFQDN,1433" -d "$SQLDB" -U "$SQL_ADMIN" -P "$SQL_PASSWORD" -N 
 ```bash
 sqlcmd -S "tcp:$SQLFQDN,1433" -d "$SQLDB" -U "$SQL_ADMIN" -P "$SQL_PASSWORD" -N -C -Q "SELECT name FROM sys.tables ORDER BY name;"
 ```
-(`tenant` `product` `session` `reading` `snapshot` `destination` `destination_header` `destination_mask` が並ぶ)
+(`tenant` `product` `session` `reading` `snapshot` `destination` `destination_header` `mask` が並ぶ)
 
 ## 5. Functions 発行
 ```bash
