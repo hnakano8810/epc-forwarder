@@ -12,7 +12,7 @@ public sealed class IngestionFunction(IngestionDispatcher dispatcher, ILogger<In
 {
     [Function("Ingestion")]
     public async Task Run(
-        [EventHubTrigger("%IoTHubEventHubName%", Connection = "IoTHubEventHubConnection", IsBatched = true)] string[] messages,
+        [EventHubTrigger("%IoTHubEventHubName%", Connection = "IoTHubEventHubConnection", ConsumerGroup = "functions", IsBatched = true)] string[] messages,
         CancellationToken ct)
     {
         foreach (var raw in messages)
