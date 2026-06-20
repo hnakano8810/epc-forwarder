@@ -1,22 +1,16 @@
-using Azure.Monitor.OpenTelemetry.Exporter;
 using EpcForwarder.Infrastructure.DependencyInjection;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Builder;
-using Microsoft.Azure.Functions.Worker.OpenTelemetry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using OpenTelemetry;
 
 var builder = FunctionsApplication.CreateBuilder(args);
 
 builder.ConfigureFunctionsWebApplication();
 
-if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING")))
-{
-    builder.Services.AddOpenTelemetry()
-        .UseFunctionsWorkerDefaults()
-        .UseAzureMonitorExporter();
-}
+// Application Insights(.NET isolated 標準連携)。APPLICATIONINSIGHTS_CONNECTION_STRING があれば自動エクスポート。
+builder.Services.AddApplicationInsightsTelemetryWorkerService();
+builder.Services.ConfigureFunctionsApplicationInsights();
 
 var sqlConnectionString = builder.Configuration["SqlConnectionString"]
     ?? throw new InvalidOperationException("App setting 'SqlConnectionString' is required.");
