@@ -4,8 +4,11 @@ using EpcForwarder.Core.Query;
 using EpcForwarder.Core.Sessions;
 using EpcForwarder.Core.Tests.Fakes;
 using EpcForwarder.Functions.Api;
+using EpcForwarder.Functions.Auth;
+using EpcForwarder.Functions.Tests.Fakes;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.Functions.Worker;
 using Xunit;
 
 namespace EpcForwarder.Functions.Tests.Api;
@@ -28,22 +31,25 @@ public class SessionQueryApiTests
         return (new SessionQueryApi(svc), id);
     }
 
-    private static HttpRequest Request(int? tenant)
+    /// <summary>認証済みテナントを持つ FunctionContext を生成。null は未認証(401 テスト用)。</summary>
+    private static FunctionContext Context(int? tenant)
     {
-        var ctx = new DefaultHttpContext();
+        var ctx = new FakeFunctionContext();
         if (tenant is not null)
         {
-            ctx.Request.Headers[RequestTenant.HeaderName] = tenant.Value.ToString();
+            AuthenticatedTenant.Set(ctx, tenant.Value);
         }
 
-        return ctx.Request;
+        return ctx;
     }
+
+    private static HttpRequest PlainRequest() => new DefaultHttpContext().Request;
 
     [Fact]
     public void GetSummary_ValidTenant_ReturnsOkWithDto()
     {
         var (api, id) = BuildWithSession();
-        var result = api.GetSummary(Request(tenant: 1), id);
+        var result = api.GetSummary(PlainRequest(), id, Context(tenant: 1));
 
         var ok = Assert.IsType<OkObjectResult>(result);
         var dto = Assert.IsType<SummaryDto>(ok.Value);
@@ -52,18 +58,18 @@ public class SessionQueryApiTests
     }
 
     [Fact]
-    public void GetSummary_MissingTenantHeader_ReturnsBadRequest()
+    public void GetSummary_NoTenant_ReturnsUnauthorized()
     {
         var (api, id) = BuildWithSession();
-        var result = api.GetSummary(Request(tenant: null), id);
-        Assert.IsType<BadRequestObjectResult>(result);
+        var result = api.GetSummary(PlainRequest(), id, Context(tenant: null));
+        Assert.IsType<UnauthorizedResult>(result);
     }
 
     [Fact]
     public void GetSummary_WrongTenant_ReturnsNotFound()
     {
         var (api, id) = BuildWithSession(tenantId: 1);
-        var result = api.GetSummary(Request(tenant: 2), id);
+        var result = api.GetSummary(PlainRequest(), id, Context(tenant: 2));
         Assert.IsType<NotFoundResult>(result);
     }
 
@@ -72,10 +78,9 @@ public class SessionQueryApiTests
     {
         var (api, id) = BuildWithSession();
         var ctx = new DefaultHttpContext();
-        ctx.Request.Headers[RequestTenant.HeaderName] = "1";
         ctx.Request.QueryString = new QueryString("?groupBy=location");
 
-        var result = api.GetSummary(ctx.Request, id);
+        var result = api.GetSummary(ctx.Request, id, Context(tenant: 1));
 
         var ok = Assert.IsType<OkObjectResult>(result);
         Assert.IsType<LocationSummaryDto>(ok.Value);
@@ -85,7 +90,7 @@ public class SessionQueryApiTests
     public void GetReconciliation_ValidTenant_ReturnsOk()
     {
         var (api, id) = BuildWithSession();
-        var result = api.GetReconciliation(Request(tenant: 1), id);
+        var result = api.GetReconciliation(PlainRequest(), id, Context(tenant: 1));
         var ok = Assert.IsType<OkObjectResult>(result);
         Assert.IsType<ReconciliationDto>(ok.Value);
     }
@@ -94,7 +99,7 @@ public class SessionQueryApiTests
     public void GetUnknown_WrongTenant_ReturnsNotFound()
     {
         var (api, id) = BuildWithSession(tenantId: 1);
-        var result = api.GetUnknown(Request(tenant: 2), id);
+        var result = api.GetUnknown(PlainRequest(), id, Context(tenant: 2));
         Assert.IsType<NotFoundResult>(result);
     }
 
@@ -102,14 +107,14 @@ public class SessionQueryApiTests
     public void GetReconciliation_WrongTenant_ReturnsNotFound()
     {
         var (api, id) = BuildWithSession(tenantId: 1);
-        Assert.IsType<NotFoundResult>(api.GetReconciliation(Request(tenant: 2), id));
+        Assert.IsType<NotFoundResult>(api.GetReconciliation(PlainRequest(), id, Context(tenant: 2)));
     }
 
     [Fact]
     public void GetUnknown_ValidTenant_ReturnsOk()
     {
         var (api, id) = BuildWithSession();
-        var ok = Assert.IsType<OkObjectResult>(api.GetUnknown(Request(tenant: 1), id));
+        var ok = Assert.IsType<OkObjectResult>(api.GetUnknown(PlainRequest(), id, Context(tenant: 1)));
         Assert.IsType<UnknownDto>(ok.Value);
     }
 
@@ -117,6 +122,6 @@ public class SessionQueryApiTests
     public void GetSummary_EmptyGuid_ReturnsBadRequest()
     {
         var (api, _) = BuildWithSession();
-        Assert.IsType<BadRequestObjectResult>(api.GetSummary(Request(tenant: 1), Guid.Empty));
+        Assert.IsType<BadRequestObjectResult>(api.GetSummary(PlainRequest(), Guid.Empty, Context(tenant: 1)));
     }
 }

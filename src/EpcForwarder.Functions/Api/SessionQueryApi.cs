@@ -1,19 +1,21 @@
 using EpcForwarder.Core.Query;
+using EpcForwarder.Functions.Auth;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 
 namespace EpcForwarder.Functions.Api;
 
-/// <summary>端末向け HTTP クエリAPI。AuthorizationLevel.Function(Functionsキー)＋ X-EPCF-Tenant 突合。</summary>
+/// <summary>端末向け HTTP クエリAPI。認証ミドルウェア解決済み tenant を FunctionContext 経由で取得。</summary>
 public sealed class SessionQueryApi(SessionQueryService queries)
 {
     [Function("GetSummary")]
     public IActionResult GetSummary(
-        [HttpTrigger(AuthorizationLevel.Function, "get", Route = "sessions/{publicId:guid}/summary")] HttpRequest req,
-        Guid publicId)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "sessions/{publicId:guid}/summary")] HttpRequest req,
+        Guid publicId,
+        FunctionContext context)
     {
-        if (Validate(req, publicId, out var tenantId) is { } error)
+        if (Validate(context, publicId, out var tenantId) is { } error)
         {
             return error;
         }
@@ -30,10 +32,11 @@ public sealed class SessionQueryApi(SessionQueryService queries)
 
     [Function("GetReconciliation")]
     public IActionResult GetReconciliation(
-        [HttpTrigger(AuthorizationLevel.Function, "get", Route = "sessions/{publicId:guid}/reconciliation")] HttpRequest req,
-        Guid publicId)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "sessions/{publicId:guid}/reconciliation")] HttpRequest req,
+        Guid publicId,
+        FunctionContext context)
     {
-        if (Validate(req, publicId, out var tenantId) is { } error)
+        if (Validate(context, publicId, out var tenantId) is { } error)
         {
             return error;
         }
@@ -44,10 +47,11 @@ public sealed class SessionQueryApi(SessionQueryService queries)
 
     [Function("GetUnknown")]
     public IActionResult GetUnknown(
-        [HttpTrigger(AuthorizationLevel.Function, "get", Route = "sessions/{publicId:guid}/unknown")] HttpRequest req,
-        Guid publicId)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "sessions/{publicId:guid}/unknown")] HttpRequest req,
+        Guid publicId,
+        FunctionContext context)
     {
-        if (Validate(req, publicId, out var tenantId) is { } error)
+        if (Validate(context, publicId, out var tenantId) is { } error)
         {
             return error;
         }
@@ -56,8 +60,8 @@ public sealed class SessionQueryApi(SessionQueryService queries)
         return view is null ? new NotFoundResult() : new OkObjectResult(ApiResponses.ToDto(view));
     }
 
-    // tenant ヘッダ＋publicId を検証。エラーなら IActionResult を返す(成功時 null)。
-    private static IActionResult? Validate(HttpRequest req, Guid publicId, out int tenantId)
+    // tenant は認証ミドルウェアが解決済み。publicId のみ検証。
+    private static IActionResult? Validate(FunctionContext context, Guid publicId, out int tenantId)
     {
         tenantId = 0;
         if (publicId == Guid.Empty)
@@ -65,9 +69,10 @@ public sealed class SessionQueryApi(SessionQueryService queries)
             return new BadRequestObjectResult("Invalid session id.");
         }
 
-        if (!RequestTenant.TryGet(req, out tenantId))
+        if (!AuthenticatedTenant.TryGet(context, out tenantId))
         {
-            return new BadRequestObjectResult($"Missing or invalid {RequestTenant.HeaderName} header.");
+            // ミドルウェアを通っていれば通常ここには来ない(防御的に 401)。
+            return new UnauthorizedResult();
         }
 
         return null;

@@ -39,6 +39,7 @@ public class AddEpcForwarderTests
     [InlineData(typeof(IIdGenerator))]
     [InlineData(typeof(IHostResolver))]
     [InlineData(typeof(IDeviceFeedback))]
+    [InlineData(typeof(ITenantLookup))]
     [InlineData(typeof(EpcForwarder.Core.Abstractions.IDestinationCatalog))]
     [InlineData(typeof(IngestionDispatcher))]
     [InlineData(typeof(SessionQueryService))]
