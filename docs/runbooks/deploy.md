@@ -1,5 +1,22 @@
 # EPC Forwarder デプロイ＋実機E2E 手順書
 
+## 推奨: 一括スクリプト
+
+通常は単一スクリプトで全工程(デプロイ→IoT接続→マイグレーション→シード→発行→デバイス→E2E検証)を実行できる。
+
+```bash
+cp scripts/deploy.env.example scripts/deploy.env
+# scripts/deploy.env を編集(SUBSCRIPTION_ID / SQL_PASSWORD / SEED_WEBHOOK_URL 等)
+az login            # 未ログインなら(必要に応じ --tenant)
+./scripts/deploy.sh
+```
+
+成功すると最後に `E2E PASSED` を表示し exit 0。途中失敗からの再実行・二度流しでも安全(再実行安全)。
+フォールバックルートと consumer group `functions` は Bicep に含まれるため手動設定は不要。
+DB マイグレーション/シードは `tools/EpcForwarder.Migrate`(dotnet)で適用するため **sqlcmd / docker は不要**。
+
+以下の手動手順は、スクリプトを使わずステップ単位で確認・復旧したい場合のフォールバックである。
+
 > 本手順は **ユーザーが実行**する(Claude は Azure へデプロイしない)。各コマンドは `!` プレフィックスでこのセッションから実行できる。
 > 前提: `az`(>=2.81)/`az bicep` ログイン済、`func`(Azure Functions Core Tools v4)、`sqlcmd`(または `go-sqlcmd`)、`dotnet`(SDK 8、publish 用)。
 
@@ -44,7 +61,7 @@ IOT_EH_CONN=$(az iot hub connection-string show -g "$RG" --hub-name "$IOT" --def
 az keyvault secret set --vault-name "$KV" --name IoTHubEventHubConnection --value "$IOT_EH_CONN" -o none
 echo "IoTHubEventHubConnection set."
 ```
-> Functions アプリ設定 `IoTHubEventHubConnection` は KV 参照で本シークレットを指す。設定後、アプリ再起動で反映:
+> 現行 Bicep では `IoTHubEventHubConnection` はリテラルの app 設定(初期はプレースホルダ)。本手順では実値を app 設定へ直接上書きする(KV シークレット方式は廃止)。設定後、アプリ再起動で反映:
 ```bash
 az functionapp restart -g "$RG" -n "$FUNC"
 ```
