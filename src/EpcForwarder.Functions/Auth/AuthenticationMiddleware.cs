@@ -3,11 +3,12 @@ using EpcForwarder.Core.Abstractions;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Middleware;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 
 namespace EpcForwarder.Functions.Auth;
 
 /// <summary>HTTP 関数の External ID トークンを検証し tenant_id を文脈へ。失敗は 401/403 で短絡。</summary>
-public sealed class AuthenticationMiddleware(JwtBearerValidator validator, ITenantLookup tenants) : IFunctionsWorkerMiddleware
+public sealed class AuthenticationMiddleware(JwtBearerValidator validator, ITenantLookup tenants, ILogger<AuthenticationMiddleware> logger) : IFunctionsWorkerMiddleware
 {
     public async Task Invoke(FunctionContext context, FunctionExecutionDelegate next)
     {
@@ -26,7 +27,20 @@ public sealed class AuthenticationMiddleware(JwtBearerValidator validator, ITena
             token = header["Bearer ".Length..].Trim();
         }
 
-        var result = await validator.ValidateAsync(token ?? "", context.CancellationToken);
+        TokenValidationResult result;
+        try
+        {
+            // 検証は OIDC メタデータ(JWKS)を HTTP 取得するため例外がありうる。
+            // 検証処理が落ちた場合は fail-closed: 認証できない=401(スタックトレースは出さない)。
+            result = await validator.ValidateAsync(token ?? "", context.CancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Token validation failed due to an error.");
+            await WriteStatus(http, StatusCodes.Status401Unauthorized, "invalid_token");
+            return;
+        }
+
         if (result.Outcome == AuthOutcome.Unauthenticated)
         {
             await WriteStatus(http, StatusCodes.Status401Unauthorized, "invalid_token");
