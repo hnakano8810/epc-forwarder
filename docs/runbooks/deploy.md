@@ -53,12 +53,12 @@ IOT=$(az deployment group show -g "$RG" -n main --query properties.outputs.iotHu
 echo "FUNC=$FUNC KV=$KV IOT=$IOT SQLFQDN=$SQLFQDN DB=$SQLDB"
 ```
 
-## 3. IoT Hub の EventHub 互換接続文字列を Key Vault へ投入
+## 3. IoT Hub の EventHub 互換接続文字列を app 設定へ投入
 ```bash
 # 組込みエンドポイント(events)の EH 互換接続文字列を取得
 IOT_EH_CONN=$(az iot hub connection-string show -g "$RG" --hub-name "$IOT" --default-eventhub -o tsv)
-# Key Vault のプレースホルダ・シークレットを実値で上書き
-az keyvault secret set --vault-name "$KV" --name IoTHubEventHubConnection --value "$IOT_EH_CONN" -o none
+# Functions の app 設定 IoTHubEventHubConnection(初期はプレースホルダ)を実値で上書き
+az functionapp config appsettings set -g "$RG" -n "$FUNC" --settings "IoTHubEventHubConnection=$IOT_EH_CONN" -o none
 echo "IoTHubEventHubConnection set."
 ```
 > 現行 Bicep では `IoTHubEventHubConnection` はリテラルの app 設定(初期はプレースホルダ)。本手順では実値を app 設定へ直接上書きする(KV シークレット方式は廃止)。設定後、アプリ再起動で反映:

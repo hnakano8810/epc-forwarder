@@ -126,8 +126,13 @@ run_e2e() {
     sleep 5
   done
 
-  # 毎回新規 session_id(再実行安全)
-  sid=$(cat /proc/sys/kernel/random/uuid)
+  # 毎回新規 session_id(再実行安全)。uuidgen は macOS/Linux 双方にあり、
+  # 無い環境では Linux の /proc にフォールバック。
+  if command -v uuidgen >/dev/null 2>&1; then
+    sid=$(uuidgen | tr '[:upper:]' '[:lower:]')
+  else
+    sid=$(cat /proc/sys/kernel/random/uuid)
+  fi
   log "E2E session=$sid"
 
   # read(SKU 解決される EPC)+ complete(expected=1)を D2C 送信
