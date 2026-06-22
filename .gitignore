@@ -485,3 +485,6 @@ $RECYCLE.BIN/
 
 # Azure Functions local settings
 local.settings.json
+
+# デプロイ作業者のローカル秘密(テンプレートは deploy.env.example)
+scripts/deploy.env
