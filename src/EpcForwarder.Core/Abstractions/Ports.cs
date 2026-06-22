@@ -19,6 +19,12 @@ public interface ISessionStore
     void Save(Session session);
 }
 
+/// <summary>テナント識別コード(tenant.code)を内部 tenant_id に解決する。未知なら null。</summary>
+public interface ITenantLookup
+{
+    int? ResolveId(string code);
+}
+
 /// <summary>読取に付随するロケーション文脈(棚卸のロケ別集計に使用)。全要素任意。</summary>
 public sealed record ReadLocation(string? L1, string? L2, string? L3);
 
