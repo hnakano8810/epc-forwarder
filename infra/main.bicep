@@ -1,6 +1,6 @@
-// EPC Forwarder インフラ(④)。IoT Hub / Flex Consumption Functions / Azure SQL / Key Vault / Storage / App Insights。
-// 認証は MI 中心: Functions MI に Key Vault Secrets User と Storage Blob Data Owner を付与。
-// SQL/IoT Hub の接続文字列は Key Vault に格納し、アプリ設定は KV 参照で注入。
+// EPC Forwarder インフラ(④)。IoT Hub / Functions(Linux Consumption Y1) / Azure SQL / Key Vault / Storage / App Insights。
+// Functions MI に Key Vault Secrets User(per-destination シークレット解決用)を付与。
+// Y1 は AzureWebJobsStorage にキー接続が必須。SQL はリテラル注入、IoT 接続はデプロイ後にCLIで設定。
 targetScope = 'resourceGroup'
 
 @description('リソース名プレフィックス')
@@ -66,20 +66,15 @@ resource storageAcct 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
   name: storageName
 }
 
-// Key Vault シークレット — parent: kv(var 名 existing)で宣言
+// 接続文字列。Y1 は AzureWebJobsStorage にキー接続が必須。SQL はKV参照を避けリテラル注入。
+var sqlConn = 'Server=tcp:${sql.outputs.sqlServerFqdn},1433;Database=${sql.outputs.databaseName};User ID=${sqlAdminLogin};Password=${sqlAdminPassword};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
+var storageConn = 'DefaultEndpointsProtocol=https;AccountName=${storageName};EndpointSuffix=${environment().suffixes.storage};AccountKey=${listKeys(storageAcct.id, '2023-05-01').keys[0].value}'
+
+// Key Vault シークレット(per-destination の HMAC/ヘッダ値を運用で投入する箱として残置。アプリの接続文字列はアプリ設定にリテラル注入)
 resource sqlConnSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   parent: kv
   name: 'SqlConnectionString'
-  properties: {
-    value: 'Server=tcp:${sql.outputs.sqlServerFqdn},1433;Database=${sql.outputs.databaseName};User ID=${sqlAdminLogin};Password=${sqlAdminPassword};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
-  }
-  dependsOn: [keyvault]
-}
-
-resource iotConnSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
-  parent: kv
-  name: 'IoTHubEventHubConnection'
-  properties: { value: 'PLACEHOLDER_SET_BY_RUNBOOK' }
+  properties: { value: sqlConn }
   dependsOn: [keyvault]
 }
 
@@ -89,13 +84,11 @@ module functions 'modules/functions.bicep' = {
     namePrefix: namePrefix
     location: location
     suffix: suffix
-    storageBlobEndpoint: storage.outputs.storageBlobEndpoint
-    deployContainerName: storage.outputs.deployContainerName
-    storageAccountName: storage.outputs.storageAccountName
+    storageConnectionString: storageConn
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     keyVaultUri: keyvault.outputs.keyVaultUri
-    sqlConnSecretUri: '${keyvault.outputs.keyVaultUri}secrets/SqlConnectionString'
-    iotConnSecretUri: '${keyvault.outputs.keyVaultUri}secrets/IoTHubEventHubConnection'
+    sqlConnectionString: sqlConn
+    iotEventHubConnectionString: 'PLACEHOLDER_SET_POST_DEPLOY'
     eventHubName: iothub.outputs.eventHubCompatiblePath
   }
 }

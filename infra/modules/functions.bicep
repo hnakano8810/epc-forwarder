@@ -6,57 +6,49 @@ param location string
 @description('グローバル一意サフィックス')
 param suffix string
 
-@description('デプロイパッケージ用ストレージ blob エンドポイント')
-param storageBlobEndpoint string
-@description('デプロイコンテナ名')
-param deployContainerName string
-@description('ランタイム用ストレージアカウント名(AzureWebJobsStorage__accountName)')
-param storageAccountName string
+@description('AzureWebJobsStorage 用ストレージ接続文字列(Consumption はキー接続が必須)')
+@secure()
+param storageConnectionString string
 @description('App Insights 接続文字列')
 param appInsightsConnectionString string
 @description('Key Vault URI(アプリの per-destination シークレット解決用)')
 param keyVaultUri string
-@description('SqlConnectionString シークレットの URI(KV参照)')
-param sqlConnSecretUri string
-@description('IoTHubEventHubConnection シークレットの URI(KV参照)')
-param iotConnSecretUri string
-@description('EventHub 互換エンドポイントのエンティティパス')
+@description('SQL 接続文字列(リテラル注入)')
+@secure()
+param sqlConnectionString string
+@description('IoT Hub EventHub 互換接続文字列(初期はプレースホルダ、デプロイ後CLIで設定)')
+@secure()
+param iotEventHubConnectionString string
+@description('EventHub 互換エンティティパス')
 param eventHubName string
 
+// Linux Consumption(Y1)。Flex の functionAppConfig は使わず従来の siteConfig/appSettings。
 resource plan 'Microsoft.Web/serverfarms@2023-12-01' = {
   name: '${namePrefix}-plan'
   location: location
-  sku: { name: 'FC1', tier: 'FlexConsumption' }
+  sku: { name: 'Y1', tier: 'Dynamic' }
   kind: 'functionapp'
-  properties: { reserved: true }
+  properties: { reserved: true } // Linux
 }
 
 resource site 'Microsoft.Web/sites@2023-12-01' = {
   name: toLower('${namePrefix}-func-${suffix}')
   location: location
   kind: 'functionapp,linux'
-  identity: { type: 'SystemAssigned' }
+  identity: { type: 'SystemAssigned' } // per-destination シークレットを KeyVaultSecretStore(DefaultAzureCredential)で解決
   properties: {
     serverFarmId: plan.id
     httpsOnly: true
-    functionAppConfig: {
-      deployment: {
-        storage: {
-          type: 'blobContainer'
-          value: '${storageBlobEndpoint}${deployContainerName}'
-          authentication: { type: 'SystemAssignedIdentity' }
-        }
-      }
-      runtime: { name: 'dotnet-isolated', version: '8.0' }
-      scaleAndConcurrency: { maximumInstanceCount: 40, instanceMemoryMB: 2048 }
-    }
     siteConfig: {
+      linuxFxVersion: 'DOTNET-ISOLATED|8.0'
       appSettings: [
-        { name: 'AzureWebJobsStorage__accountName', value: storageAccountName }
+        { name: 'AzureWebJobsStorage', value: storageConnectionString }
+        { name: 'FUNCTIONS_EXTENSION_VERSION', value: '~4' }
+        { name: 'FUNCTIONS_WORKER_RUNTIME', value: 'dotnet-isolated' }
         { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString }
         { name: 'KeyVaultUri', value: keyVaultUri }
-        { name: 'SqlConnectionString', value: '@Microsoft.KeyVault(SecretUri=${sqlConnSecretUri})' }
-        { name: 'IoTHubEventHubConnection', value: '@Microsoft.KeyVault(SecretUri=${iotConnSecretUri})' }
+        { name: 'SqlConnectionString', value: sqlConnectionString }
+        { name: 'IoTHubEventHubConnection', value: iotEventHubConnectionString }
         { name: 'IoTHubEventHubName', value: eventHubName }
       ]
     }
