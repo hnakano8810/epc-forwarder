@@ -1,3 +1,4 @@
+using EpcForwarder.Functions.Auth;
 using EpcForwarder.Infrastructure.DependencyInjection;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Builder;
@@ -8,7 +9,7 @@ var builder = FunctionsApplication.CreateBuilder(args);
 
 builder.ConfigureFunctionsWebApplication();
 
-// Application Insights(.NET isolated 標準連携)。APPLICATIONINSIGHTS_CONNECTION_STRING があれば自動エクスポート。
+// Application Insights(.NET isolated 標準連携)。
 builder.Services.AddApplicationInsightsTelemetryWorkerService();
 builder.Services.ConfigureFunctionsApplicationInsights();
 
@@ -20,5 +21,19 @@ builder.Services.AddEpcForwarder(new EpcForwarderOptions
     SqlConnectionString = sqlConnectionString,
     KeyVaultUri = builder.Configuration["KeyVaultUri"],
 });
+
+// External ID トークン検証(HTTP API 用)。
+var authOptions = new AuthOptions
+{
+    Issuer = builder.Configuration["Auth:Issuer"] ?? "",
+    Audience = builder.Configuration["Auth:Audience"] ?? "",
+    TenantClaim = builder.Configuration["Auth:TenantClaim"] ?? "",
+    MetadataAddress = builder.Configuration["Auth:MetadataAddress"] ?? "",
+};
+builder.Services.AddSingleton(authOptions);
+builder.Services.AddSingleton<ITokenValidationParametersProvider>(_ => new OpenIdTokenValidationParametersProvider(authOptions));
+builder.Services.AddSingleton<JwtBearerValidator>();
+
+builder.UseMiddleware<AuthenticationMiddleware>();
 
 builder.Build().Run();
