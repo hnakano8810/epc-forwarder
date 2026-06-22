@@ -3,8 +3,11 @@ using EpcForwarder.Core.Inventory;
 using EpcForwarder.Core.Sessions;
 using EpcForwarder.Core.Tests.Fakes;
 using EpcForwarder.Functions.Api;
+using EpcForwarder.Functions.Auth;
+using EpcForwarder.Functions.Tests.Fakes;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.Functions.Worker;
 using Xunit;
 
 namespace EpcForwarder.Functions.Tests.Api;
@@ -31,16 +34,19 @@ public class InventoryApiTests
         }
     }
 
-    private static HttpRequest Request(int? tenant)
+    /// <summary>認証済みテナントを持つ FunctionContext を生成。null は未認証(401 テスト用)。</summary>
+    private static FunctionContext Context(int? tenant)
     {
-        var c = new DefaultHttpContext();
+        var ctx = new FakeFunctionContext();
         if (tenant is not null)
         {
-            c.Request.Headers[RequestTenant.HeaderName] = tenant.Value.ToString();
+            AuthenticatedTenant.Set(ctx, tenant.Value);
         }
 
-        return c.Request;
+        return ctx;
     }
+
+    private static HttpRequest PlainRequest() => new DefaultHttpContext().Request;
 
     private static Guid OpenInventory(Ctx ctx, int tenant = 1)
     {
@@ -57,7 +63,7 @@ public class InventoryApiTests
         var api = ctx.Build();
         var id = OpenInventory(ctx);
 
-        var result = await api.SendProvisional(Request(1), id);
+        var result = await api.SendProvisional(PlainRequest(), id, Context(1));
 
         var ok = Assert.IsType<OkObjectResult>(result);
         var dto = Assert.IsType<InventoryResultDto>(ok.Value);
@@ -73,7 +79,7 @@ public class InventoryApiTests
         var api = ctx.Build();
         var id = OpenInventory(ctx);
 
-        var result = await api.Finalize(Request(1), id);
+        var result = await api.Finalize(PlainRequest(), id, Context(1));
 
         var ok = Assert.IsType<OkObjectResult>(result);
         var dto = Assert.IsType<InventoryResultDto>(ok.Value);
@@ -88,7 +94,7 @@ public class InventoryApiTests
         var api = ctx.Build();
         var id = OpenInventory(ctx);
 
-        var result = await api.SendProvisional(Request(1), id);
+        var result = await api.SendProvisional(PlainRequest(), id, Context(1));
 
         var ok = Assert.IsType<OkObjectResult>(result);
         var dto = Assert.IsType<InventoryResultDto>(ok.Value);
@@ -97,12 +103,12 @@ public class InventoryApiTests
     }
 
     [Fact]
-    public async Task Provisional_MissingTenant_ReturnsBadRequest()
+    public async Task Provisional_NoTenant_ReturnsUnauthorized()
     {
         var ctx = new Ctx();
         var api = ctx.Build();
         var id = OpenInventory(ctx);
-        Assert.IsType<BadRequestObjectResult>(await api.SendProvisional(Request(null), id));
+        Assert.IsType<UnauthorizedResult>(await api.SendProvisional(PlainRequest(), id, Context(null)));
     }
 
     [Fact]
@@ -111,7 +117,7 @@ public class InventoryApiTests
         var ctx = new Ctx();
         var api = ctx.Build();
         var id = OpenInventory(ctx, tenant: 1);
-        Assert.IsType<NotFoundResult>(await api.SendProvisional(Request(2), id));
+        Assert.IsType<NotFoundResult>(await api.SendProvisional(PlainRequest(), id, Context(2)));
     }
 
     [Fact]
@@ -122,8 +128,8 @@ public class InventoryApiTests
         var api = ctx.Build();
         var id = OpenInventory(ctx);
 
-        await api.Finalize(Request(1), id);                 // 1回目: forwarded
-        var second = await api.Finalize(Request(1), id);    // 2回目: 状態不正
+        await api.Finalize(PlainRequest(), id, Context(1));                  // 1回目: forwarded
+        var second = await api.Finalize(PlainRequest(), id, Context(1));     // 2回目: 状態不正
 
         Assert.IsType<ConflictObjectResult>(second);
     }
@@ -133,6 +139,6 @@ public class InventoryApiTests
     {
         var ctx = new Ctx();
         var api = ctx.Build();
-        Assert.IsType<BadRequestObjectResult>(await api.SendProvisional(Request(1), Guid.Empty));
+        Assert.IsType<BadRequestObjectResult>(await api.SendProvisional(PlainRequest(), Guid.Empty, Context(1)));
     }
 }
