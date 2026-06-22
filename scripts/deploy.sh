@@ -111,6 +111,60 @@ ensure_device() {
   fi
 }
 
+# --- 9. E2E 検証(取込 + クエリAPI)。失敗で非0 exit ---
+run_e2e() {
+  CURRENT_STEP="e2e"
+  local host key sid code body
+  host=$(az functionapp show -g "$RG" -n "$FUNC" --query defaultHostName -o tsv | tr -d '\r\n')
+  set +x
+  key=$(az functionapp keys list -g "$RG" -n "$FUNC" --query functionKeys.default -o tsv | tr -d '\r\n')
+
+  # host 温め(200 になるまで最大 ~60s)
+  for _ in $(seq 1 12); do
+    code=$(curl -s -o /dev/null -w "%{http_code}" "https://$host/" | tr -d '\r\n')
+    [ "$code" = "200" ] && break
+    sleep 5
+  done
+
+  # 毎回新規 session_id(再実行安全)
+  sid=$(cat /proc/sys/kernel/random/uuid)
+  log "E2E session=$sid"
+
+  # read(SKU 解決される EPC)+ complete(expected=1)を D2C 送信
+  az iot device send-d2c-message --hub-name "$IOT" --device-id "$DEVICE_ID" \
+    --data "{\"kind\":\"read\",\"tenant\":1,\"session_id\":\"$sid\",\"business_key\":\"DEPLOY-E2E\",\"session_type\":\"shipment\",\"resolve_sku\":true,\"epc\":\"302DB42318A0038000001231\",\"device_id\":\"$DEVICE_ID\",\"read_at\":\"2026-01-01T00:00:00Z\"}" -o none
+  az iot device send-d2c-message --hub-name "$IOT" --device-id "$DEVICE_ID" \
+    --data "{\"kind\":\"complete\",\"tenant\":1,\"session_id\":\"$sid\",\"expected_count\":1}" -o none
+
+  # summary を 200 までポーリング(最大 ~120s)
+  local url="https://$host/api/sessions/$sid/summary?code=$key"
+  code=000
+  for _ in $(seq 1 24); do
+    code=$(curl -s -o /tmp/epcf_e2e_summary.json -w "%{http_code}" -H "X-EPCF-Tenant: 1" "$url" | tr -d '\r\n')
+    [ "$code" = "200" ] && break
+    sleep 5
+  done
+  [ "$code" = "200" ] || { echo "E2E FAIL: summary が 200 になりません (last=$code)" >&2; return 1; }
+
+  body=$(cat /tmp/epcf_e2e_summary.json)
+  echo "summary: $body"
+  echo "$body" | grep -q '"total_quantity":1' || { echo "E2E FAIL: total_quantity!=1" >&2; return 1; }
+  echo "$body" | grep -q '"sku":"ITEM-AAA"' || { echo "E2E FAIL: SKU が ITEM-AAA でない" >&2; return 1; }
+  echo "$body" | grep -q '"unknown_count":0' || { echo "E2E FAIL: unknown_count!=0" >&2; return 1; }
+
+  # reconciliation: expected=received=1, match=true
+  body=$(curl -s -H "X-EPCF-Tenant: 1" "https://$host/api/sessions/$sid/reconciliation?code=$key")
+  echo "reconciliation: $body"
+  echo "$body" | grep -q '"match":true' || { echo "E2E FAIL: reconciliation match!=true" >&2; return 1; }
+
+  # 他テナントは 404
+  code=$(curl -s -o /dev/null -w "%{http_code}" -H "X-EPCF-Tenant: 2" "$url" | tr -d '\r\n')
+  [ "$code" = "404" ] || { echo "E2E FAIL: 他テナントが 404 でない (got=$code)" >&2; return 1; }
+
+  rm -f /tmp/epcf_e2e_summary.json
+  log "E2E PASSED (session=$sid)"
+}
+
 main() {
   preflight
   ensure_rg
@@ -120,7 +174,8 @@ main() {
   run_migrations_and_seed
   publish_functions
   ensure_device
-  log "Provisioning complete. FUNC=$FUNC IOT=$IOT"
+  run_e2e
+  log "ALL DONE. FUNC=$FUNC IOT=$IOT  E2E=PASSED"
 }
 
 main "$@"
