@@ -33,8 +33,8 @@ public sealed class IngestionFunction(IngestionDispatcher dispatcher, ILogger<In
 
             switch (command)
             {
-                case ReadCommand read:
-                    dispatcher.IngestRead(read);
+                case ReadBatchCommand reads:
+                    dispatcher.IngestReads(reads);
                     break;
                 case CompleteCommand complete:
                     var outcome = await dispatcher.CompleteAsync(complete, ct);

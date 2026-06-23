@@ -49,4 +49,50 @@ public sealed class SqlReadingStoreTests(SqlServerFixture fx)
         store.Upsert(sid, new ReadingEntry("BB01", null, "d", DateTimeOffset.UnixEpoch));
         Assert.Null(store.List(sid).Single().SearchKey);
     }
+
+    [Fact]
+    public void UpsertBatch_InsertsAllRows_InOneCall()
+    {
+        var (store, sid) = StoreWithSession();
+        store.UpsertBatch(sid,
+        [
+            new ReadingEntry("302DB42318A0038000001231", null, "devA", DateTimeOffset.UnixEpoch),
+            new ReadingEntry("302DB42318A0038000001232", null, "devA", DateTimeOffset.UnixEpoch),
+            new ReadingEntry("302DB42318A0038000001233", null, "devA", DateTimeOffset.UnixEpoch),
+        ]);
+
+        Assert.Equal(3, store.CountUnique(sid));
+    }
+
+    [Fact]
+    public void UpsertBatch_SameEpcDifferentLocation_LastWriteWins()
+    {
+        var (store, sid) = StoreWithSession();
+        var t0 = DateTimeOffset.UnixEpoch;
+
+        store.UpsertBatch(sid, [new ReadingEntry("302DB42318A0038000001231", null, "devA", t0, new ReadLocation("DC", "1F", "A-01"))]);
+        // 別ロケ・新しい時刻で再投入 → 後勝ちで location 上書き、件数は不変。
+        store.UpsertBatch(sid, [new ReadingEntry("302DB42318A0038000001231", null, "devB", t0.AddSeconds(5), new ReadLocation("DC", "2F", "B-02"))]);
+
+        Assert.Equal(1, store.CountUnique(sid));
+        var row = store.List(sid).Single();
+        Assert.Equal(new ReadLocation("DC", "2F", "B-02"), row.Location);
+        Assert.Equal("devB", row.DeviceId);
+    }
+
+    [Fact]
+    public void UpsertBatch_ResentBatch_IsIdempotent()
+    {
+        var (store, sid) = StoreWithSession();
+        ReadingEntry[] batch =
+        [
+            new("302DB42318A0038000001231", null, "devA", DateTimeOffset.UnixEpoch),
+            new("302DB42318A0038000001232", null, "devA", DateTimeOffset.UnixEpoch),
+        ];
+
+        store.UpsertBatch(sid, batch);
+        store.UpsertBatch(sid, batch);   // at-least-once 再送
+
+        Assert.Equal(2, store.CountUnique(sid));
+    }
 }

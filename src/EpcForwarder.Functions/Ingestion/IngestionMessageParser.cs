@@ -17,29 +17,34 @@ public static class IngestionMessageParser
 
         return head.Kind switch
         {
-            "read" => ToRead(JsonSerializer.Deserialize<ReadMessage>(json, Options)!),
+            "reads" => ToReads(JsonSerializer.Deserialize<ReadsMessage>(json, Options)!),
             "complete" => ToComplete(JsonSerializer.Deserialize<CompleteMessage>(json, Options)!),
             _ => throw new FormatException($"Unknown ingestion message kind: '{head.Kind}'."),
         };
     }
 
-    private static ReadCommand ToRead(ReadMessage m)
+    private static ReadBatchCommand ToReads(ReadsMessage m)
     {
         if (!Enum.TryParse<SessionType>(m.SessionType, ignoreCase: true, out var sessionType))
         {
             throw new FormatException($"Unknown session_type: '{m.SessionType}'.");
         }
 
-        return new ReadCommand(
+        var reads = m.Epcs
+            .Select(e => new ReadEntry(
+                e.Epc,
+                e.ReadAt,
+                e.Location is null ? null : new ReadLocation(e.Location.L1, e.Location.L2, e.Location.L3)))
+            .ToList();
+
+        return new ReadBatchCommand(
             m.Tenant,
             m.SessionId,
             m.BusinessKey,
             sessionType,
             m.ResolveSku,
-            m.Epc,
             m.DeviceId,
-            m.Location is null ? null : new ReadLocation(m.Location.L1, m.Location.L2, m.Location.L3),
-            m.ReadAt);
+            reads);
     }
 
     private static CompleteCommand ToComplete(CompleteMessage m) => new(m.Tenant, m.SessionId, m.ExpectedCount);
