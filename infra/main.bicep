@@ -14,6 +14,15 @@ param sqlAdminLogin string
 @secure()
 param sqlAdminPassword string
 
+@description('Entra External ID issuer(テナント未作成時は空。空なら認証ミドルウェアは fail-closed)')
+param authIssuer string = ''
+@description('Entra External ID audience(api://epcf-api 等)')
+param authAudience string = ''
+@description('tenant クレーム名(extension_<appid>_tenantId)')
+param authTenantClaim string = ''
+@description('OIDC メタデータ URL')
+param authMetadataAddress string = ''
+
 var suffix = uniqueString(resourceGroup().id)
 
 // 組込みロール定義 ID
@@ -90,6 +99,10 @@ module functions 'modules/functions.bicep' = {
     sqlConnectionString: sqlConn
     iotEventHubConnectionString: 'PLACEHOLDER_SET_POST_DEPLOY'
     eventHubName: iothub.outputs.eventHubCompatiblePath
+    authIssuer: authIssuer
+    authAudience: authAudience
+    authTenantClaim: authTenantClaim
+    authMetadataAddress: authMetadataAddress
   }
 }
 
