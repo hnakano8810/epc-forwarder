@@ -1,21 +1,58 @@
 # EPC Forwarder デプロイ＋実機E2E 手順書
 
-## 推奨: 一括スクリプト
+## 役割分担(重要)
 
-通常は単一スクリプトで全工程(デプロイ→IoT接続→マイグレーション→シード→発行→デバイス→E2E検証)を実行できる。
+ライフサイクルの違いで2つに分離している:
+
+- **インフラ(稀に変更)= `scripts/deploy.sh`**: Azureリソース作成 + リソース間結線(RG / Bicep / IoT接続のapp設定)まで。
+- **アプリ更新・E2E(毎マージ)= GitHub Actions `.github/workflows/ci-cd.yml`**: `main` マージで migrate → seed → publish → E2E(SQL直接 `verify`)。PR では build + テストのみ。
+
+## A. インフラ プロビジョニング(deploy.sh)
 
 ```bash
 cp scripts/deploy.env.example scripts/deploy.env
-# scripts/deploy.env を編集(SUBSCRIPTION_ID / SQL_PASSWORD / SEED_WEBHOOK_URL 等)
+# scripts/deploy.env を編集(SUBSCRIPTION_ID / SQL_PASSWORD、External ID 作成後は AUTH_*)
 az login            # 未ログインなら(必要に応じ --tenant)
 ./scripts/deploy.sh
 ```
+リソース作成 + IoT接続のapp設定までを再実行安全に行う(`INFRA DONE` 表示で完了)。フォールバックルート・consumer group `functions`・`Auth__*` は Bicep に含まれる。**migrate/publish/E2E は実行しない(CI の担当)**。
 
-成功すると最後に `E2E PASSED` を表示し exit 0。途中失敗からの再実行・二度流しでも安全(再実行安全)。
-フォールバックルートと consumer group `functions` は Bicep に含まれるため手動設定は不要。
+## B. アプリ更新・E2E(GitHub Actions)
+
+`main` にマージされると `ci-cd.yml` の deploy ジョブが migrate(0003含む全適用)→ seed(テストtenantのフィクスチャ)→ publish → E2E を実行。E2E は認証必須のクエリAPIに依存せず、`reads`+`complete` を D2C 送信して `EpcForwarder.Migrate verify <sid> <tenant> <count>`(SQL直接: 取込件数＋`session.status=forwarded`)で合否判定する。
+
+### B-1. 初回のみ: OIDC セットアップ(手動・一回)
+GitHub Actions が保存シークレット無しで Azure にログインするための連合資格情報を作る。
+
+```bash
+# 1) アプリ登録
+APP_ID=$(az ad app create --display-name epcf-github-oidc --query appId -o tsv)
+az ad sp create --id "$APP_ID"
+# 2) 連合資格情報(main ブランチ push 用)
+az ad app federated-credential create --id "$APP_ID" --parameters '{
+  "name":"gh-main",
+  "issuer":"https://token.actions.githubusercontent.com",
+  "subject":"repo:hnakano8810/epc-forwarder:ref:refs/heads/main",
+  "audiences":["api://AzureADTokenExchange"]
+}'
+# 3) ロール付与: epcf-rg Contributor + Key Vault Secrets User(SqlConnectionString 取得用)
+SP_OID=$(az ad sp show --id "$APP_ID" --query id -o tsv)
+RGID=$(az group show -n epcf-rg --query id -o tsv)
+az role assignment create --assignee-object-id "$SP_OID" --assignee-principal-type ServicePrincipal \
+  --role Contributor --scope "$RGID"
+KVID=$(az keyvault show -n <epcfkv...> --query id -o tsv)
+az role assignment create --assignee-object-id "$SP_OID" --assignee-principal-type ServicePrincipal \
+  --role "Key Vault Secrets User" --scope "$KVID"
+```
+GitHub 側に登録(Settings → Secrets and variables → Actions):
+- **Variables**: `AZURE_SUBSCRIPTION_ID` / `RG`(=epcf-rg) / `PREFIX`(=epcf)
+- **Secrets**: `AZURE_CLIENT_ID`(=$APP_ID) / `AZURE_TENANT_ID` / `SEED_WEBHOOK_URL`
+- SQL パスワードは GitHub に置かない(CI は Key Vault の `SqlConnectionString` から取得)。
+
+---
+
+以下の手動手順は、CI を使わずステップ単位で確認・復旧したい場合のフォールバックである(migrate/publish/E2E は通常 CI が実行)。
 DB マイグレーション/シードは `tools/EpcForwarder.Migrate`(dotnet)で適用するため **sqlcmd / docker は不要**。
-
-以下の手動手順は、スクリプトを使わずステップ単位で確認・復旧したい場合のフォールバックである。
 
 > 本手順は **ユーザーが実行**する(Claude は Azure へデプロイしない)。各コマンドは `!` プレフィックスでこのセッションから実行できる。
 > 前提: `az`(>=2.81)/`az bicep` ログイン済、`func`(Azure Functions Core Tools v4)、`sqlcmd`(または `go-sqlcmd`)、`dotnet`(SDK 8、publish 用)。
@@ -120,16 +157,17 @@ DEV_CONN=$(az iot hub device-identity connection-string show --hub-name "$IOT" -
 ```
 
 ## 8. 実機E2E
-### 8.1 取込(read → complete)→ 自動配信(伝票)
-`az iot device send-d2c-message` でデバイスメッセージ(取込契約 `docs/design/ingestion-contract.md`)を送る:
+### 8.1 取込(reads → complete)→ 自動配信(伝票)
+`az iot device send-d2c-message` でデバイスメッセージ(取込契約 `docs/design/ingestion-contract.md`)を送る。**取込は `reads`(EPC配列)形式**(単数 `read` は廃止):
 ```bash
-# read 1件(SKU解決される EPC)
+# reads(EPC配列。SKU解決される EPC を1件)
 az iot device send-d2c-message --hub-name "$IOT" --device-id handy-07 \
-  --data '{"kind":"read","tenant":1,"session_id":"9c3a8f10-0000-0000-0000-000000000001","business_key":"DN-1","session_type":"shipment","resolve_sku":true,"epc":"302DB42318A0038000001231","device_id":"handy-07","read_at":"2026-06-19T00:00:01Z"}'
+  --data '{"kind":"reads","tenant":1,"session_id":"9c3a8f10-0000-0000-0000-000000000001","business_key":"DN-1","session_type":"shipment","resolve_sku":true,"device_id":"handy-07","epcs":[{"epc":"302DB42318A0038000001231","read_at":"2026-06-19T00:00:01Z"}]}'
 # complete(expected=1)
 az iot device send-d2c-message --hub-name "$IOT" --device-id handy-07 \
   --data '{"kind":"complete","tenant":1,"session_id":"9c3a8f10-0000-0000-0000-000000000001","expected_count":1}'
 ```
+SQL 直接で確認するなら(CI と同じ判定): `EPCF_SQL_CONNECTION=... dotnet run --project tools/EpcForwarder.Migrate -- verify 9c3a8f10-0000-0000-0000-000000000001 1 1`。
 確認:
 - webhook.site に確定スナップショット POST(`is_final:true`, `items:[{sku:ITEM-AAA,quantity:1}]`)が届く。
 - App Insights のトレースに `Completion session=... delivered=True`。
@@ -139,16 +177,18 @@ az monitor app-insights query -g "$RG" --apps "${PREFIX}-appi" \
   echo "(App Insights クエリは数分の取込遅延あり)"
 ```
 
-### 8.2 クエリAPI(端末プル)
+### 8.2 クエリAPI(端末プル) ※認証必須・CI対象外
+PR#24 以降、クエリAPIは **Entra External ID の JWT ベアラトークン必須**(`X-EPCF-Tenant` ヘッダ・`?code=` は廃止)。tenant はトークンの `tenantId` クレームから解決する。External ID テナント未構築だと **fail-closed で 401**。構築は `entra-external-id.md`。トークン取得はユーザーフロー(対話)のため CI E2E では検証せず、ここで手動確認する:
 ```bash
 SID=9c3a8f10-0000-0000-0000-000000000001
-curl -s "https://$FUNC_HOST/api/sessions/$SID/summary?code=$FUNC_KEY" -H "X-EPCF-Tenant: 1" | jq .
-curl -s "https://$FUNC_HOST/api/sessions/$SID/reconciliation?code=$FUNC_KEY" -H "X-EPCF-Tenant: 1" | jq .
-curl -s "https://$FUNC_HOST/api/sessions/$SID/unknown?code=$FUNC_KEY" -H "X-EPCF-Tenant: 1" | jq .
-# 他テナントは 404
-curl -s -o /dev/null -w "%{http_code}\n" "https://$FUNC_HOST/api/sessions/$SID/summary?code=$FUNC_KEY" -H "X-EPCF-Tenant: 2"
+TOKEN='<External ID で取得したアクセストークン>'
+curl -s "https://$FUNC_HOST/api/sessions/$SID/summary"        -H "Authorization: Bearer $TOKEN" | jq .
+curl -s "https://$FUNC_HOST/api/sessions/$SID/reconciliation" -H "Authorization: Bearer $TOKEN" | jq .
+curl -s "https://$FUNC_HOST/api/sessions/$SID/unknown"        -H "Authorization: Bearer $TOKEN" | jq .
+# トークン無し → 401、別テナントのセッション → 404
+curl -s -o /dev/null -w "%{http_code}\n" "https://$FUNC_HOST/api/sessions/$SID/summary"
 ```
-期待: summary は `total_quantity:1` / `items:[{sku:ITEM-AAA,quantity:1}]` / `unknown_count:0`、reconciliation は `expected:1,received:1,match:true`、他テナントは `404`。
+期待: summary は `total_quantity:1` / `items:[{sku:ITEM-AAA,quantity:1}]` / `unknown_count:0`、reconciliation は `expected:1,received:1,match:true`、トークン無しは `401`。
 
 ### 8.3 棚卸(HTTPトリガー)
 棚卸セッションへ read を積んでから:

@@ -1,0 +1,126 @@
+name: ci-cd
+
+# PR: build + テストのみ(環境に触らない)
+# main push(=マージ): test 後に deploy(migrate/publish)+ E2E。
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# 単一環境(epcf-rg)への同時デプロイを直列化(古い実行はキャンセル)。
+concurrency:
+  group: epcf-deploy
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build (warnings as errors)
+        run: dotnet build -c Release --nologo
+      - name: Test (Core / Functions / Infrastructure)
+        # Infrastructure は Testcontainers で SQL Server を起動(ubuntu ランナーの Docker)。
+        run: dotnet test -c Release --no-build --nologo
+
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # OIDC フェデレーション
+      contents: read
+    env:
+      RG: ${{ vars.RG }}
+      AZURE_TEST_TENANT_ID: '1'   # seed が作るテスト/デモ tenant。E2E はこの tenant に閉じる
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolve infra outputs
+        id: infra
+        run: |
+          set -euo pipefail
+          q() { az deployment group show -g "$RG" -n main --query "properties.outputs.$1.value" -o tsv | tr -d '\r\n'; }
+          {
+            echo "func=$(q functionAppName)"
+            echo "iot=$(q iotHubName)"
+            echo "kv=$(q keyVaultName)"
+            echo "sqlfqdn=$(q sqlServerFqdn)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Open SQL firewall for runner
+        run: |
+          set -euo pipefail
+          IP=$(curl -s https://api.ipify.org | tr -d '\r\n')
+          SERVER="${{ steps.infra.outputs.sqlfqdn }}"; SERVER="${SERVER%%.*}"
+          az sql server firewall-rule create -g "$RG" -s "$SERVER" \
+            -n "gh-runner-${{ github.run_id }}" \
+            --start-ip-address "$IP" --end-ip-address "$IP" -o none
+          echo "SQL_SERVER=$SERVER" >> "$GITHUB_ENV"
+
+      - name: Migrate + seed
+        env:
+          SEED_WEBHOOK_URL: ${{ secrets.SEED_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          EPCF_SQL_CONNECTION=$(az keyvault secret show --vault-name "${{ steps.infra.outputs.kv }}" \
+            --name SqlConnectionString --query value -o tsv | tr -d '\r\n')
+          export EPCF_SQL_CONNECTION
+          dotnet run --project tools/EpcForwarder.Migrate -c Release -- migrate
+          dotnet run --project tools/EpcForwarder.Migrate -c Release -- seed
+
+      - name: Publish Functions
+        run: |
+          set -euo pipefail
+          npm i -g azure-functions-core-tools@4 --unsafe-perm true
+          ( cd src/EpcForwarder.Functions && func azure functionapp publish "${{ steps.infra.outputs.func }}" --dotnet-isolated )
+
+      - name: Ensure test device
+        run: |
+          set -euo pipefail
+          az extension add -n azure-iot -y >/dev/null 2>&1 || true
+          az iot hub device-identity create --hub-name "${{ steps.infra.outputs.iot }}" --device-id handy-ci -o none 2>/dev/null \
+            || echo "device exists"
+
+      - name: E2E (reads + complete -> SQL verify)
+        run: |
+          set -euo pipefail
+          IOT="${{ steps.infra.outputs.iot }}"
+          SID=$(cat /proc/sys/kernel/random/uuid)
+          echo "E2E session=$SID tenant=$AZURE_TEST_TENANT_ID"
+          az iot device send-d2c-message --hub-name "$IOT" --device-id handy-ci \
+            --data "{\"kind\":\"reads\",\"tenant\":${AZURE_TEST_TENANT_ID},\"session_id\":\"$SID\",\"business_key\":\"CI-E2E\",\"session_type\":\"shipment\",\"resolve_sku\":true,\"device_id\":\"handy-ci\",\"epcs\":[{\"epc\":\"302DB42318A0038000001231\",\"read_at\":\"2026-01-01T00:00:00Z\"}]}" -o none
+          az iot device send-d2c-message --hub-name "$IOT" --device-id handy-ci \
+            --data "{\"kind\":\"complete\",\"tenant\":${AZURE_TEST_TENANT_ID},\"session_id\":\"$SID\",\"expected_count\":1}" -o none
+
+          EPCF_SQL_CONNECTION=$(az keyvault secret show --vault-name "${{ steps.infra.outputs.kv }}" \
+            --name SqlConnectionString --query value -o tsv | tr -d '\r\n')
+          export EPCF_SQL_CONNECTION
+          # 取込→突合→配信は非同期。verify が通るまで最大 ~2分ポーリング。
+          for _ in $(seq 1 24); do
+            if dotnet run --project tools/EpcForwarder.Migrate -c Release -- verify "$SID" "$AZURE_TEST_TENANT_ID" 1; then
+              echo "E2E PASSED"; exit 0
+            fi
+            sleep 5
+          done
+          echo "E2E FAILED: verify が時間内に通りませんでした" >&2
+          exit 1
+
+      - name: Remove SQL firewall rule
+        if: always()
+        run: |
+          az sql server firewall-rule delete -g "$RG" -s "${SQL_SERVER:-}" \
+            -n "gh-runner-${{ github.run_id }}" -o none 2>/dev/null || true

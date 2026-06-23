@@ -22,6 +22,15 @@ param iotEventHubConnectionString string
 @description('EventHub 互換エンティティパス')
 param eventHubName string
 
+@description('Entra External ID issuer(テナント未作成時は空。空なら認証ミドルウェアは fail-closed)')
+param authIssuer string = ''
+@description('Entra External ID audience(api://epcf-api 等)')
+param authAudience string = ''
+@description('tenant クレーム名(extension_<appid>_tenantId)')
+param authTenantClaim string = ''
+@description('OIDC メタデータ URL')
+param authMetadataAddress string = ''
+
 // Linux Consumption(Y1)。Flex の functionAppConfig は使わず従来の siteConfig/appSettings。
 resource plan 'Microsoft.Web/serverfarms@2023-12-01' = {
   name: '${namePrefix}-plan'
@@ -50,6 +59,10 @@ resource site 'Microsoft.Web/sites@2023-12-01' = {
         { name: 'SqlConnectionString', value: sqlConnectionString }
         { name: 'IoTHubEventHubConnection', value: iotEventHubConnectionString }
         { name: 'IoTHubEventHubName', value: eventHubName }
+        { name: 'Auth__Issuer', value: authIssuer }
+        { name: 'Auth__Audience', value: authAudience }
+        { name: 'Auth__TenantClaim', value: authTenantClaim }
+        { name: 'Auth__MetadataAddress', value: authMetadataAddress }
       ]
     }
   }
