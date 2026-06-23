@@ -33,7 +33,8 @@ public sealed record ReadingEntry(string Epc, string? SearchKey, string? DeviceI
 
 public interface IReadingStore
 {
-    void Upsert(Guid sessionId, ReadingEntry entry); // EPC一致なら上書き（後勝ち）
+    void UpsertBatch(Guid sessionId, IReadOnlyList<ReadingEntry> entries); // (session,epc)一致なら上書き（後勝ち）を一括
+    void Upsert(Guid sessionId, ReadingEntry entry);                       // 便宜: UpsertBatch([entry]) へ委譲
     IReadOnlyList<ReadingEntry> List(Guid sessionId);
     int CountUnique(Guid sessionId);
 }

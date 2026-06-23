@@ -29,10 +29,19 @@ public sealed class InMemoryReadingStore : IReadingStore
 {
     private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<string, ReadingEntry>> _map = new();
 
-    public void Upsert(Guid sessionId, ReadingEntry entry)
+    private int _upsertBatchCalls;
+    public int UpsertBatchCalls => _upsertBatchCalls;
+
+    public void Upsert(Guid sessionId, ReadingEntry entry) => UpsertBatch(sessionId, [entry]);
+
+    public void UpsertBatch(Guid sessionId, IReadOnlyList<ReadingEntry> entries)
     {
+        Interlocked.Increment(ref _upsertBatchCalls);
         var bag = _map.GetOrAdd(sessionId, _ => new ConcurrentDictionary<string, ReadingEntry>());
-        bag[entry.Epc] = entry; // last-write-wins by EPC
+        foreach (var entry in entries)
+        {
+            bag[entry.Epc] = entry; // last-write-wins by EPC
+        }
     }
 
     public IReadOnlyList<ReadingEntry> List(Guid sessionId) =>

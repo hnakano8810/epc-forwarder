@@ -33,8 +33,9 @@ public class IngestionDispatcherTests
         }
     }
 
-    private static ReadCommand Read(Guid id, string epc, bool resolveSku = true) =>
-        new(1, id, "DN-1", SessionType.Shipment, resolveSku, epc, "devA", null, DateTimeOffset.UnixEpoch);
+    private static ReadBatchCommand Read(Guid id, string epc, bool resolveSku = true) =>
+        new(1, id, "DN-1", SessionType.Shipment, resolveSku, "devA",
+            [new ReadEntry(epc, DateTimeOffset.UnixEpoch, null)]);
 
     [Fact]
     public void IngestRead_UnknownSession_LazyCreatesSessionAndStoresReading()
@@ -43,7 +44,7 @@ public class IngestionDispatcherTests
         var d = h.Build();
         var id = Guid.NewGuid();
 
-        d.IngestRead(Read(id, "302DB42318A0038000001231"));
+        d.IngestReads(Read(id, "302DB42318A0038000001231"));
 
         var session = h.Sessions.Get(id);
         Assert.NotNull(session);
@@ -61,7 +62,7 @@ public class IngestionDispatcherTests
         var id = Guid.NewGuid();
         h.Sessions.Save(new Session(id, 1, SessionType.Shipment, "DN-EXISTING", h.Clock.UtcNow));
 
-        d.IngestRead(Read(id, "302DB42318A0038000001231"));
+        d.IngestReads(Read(id, "302DB42318A0038000001231"));
 
         Assert.Equal("DN-EXISTING", h.Sessions.Get(id)!.BusinessKey);
         Assert.Single(h.Readings.List(id));
@@ -78,7 +79,7 @@ public class IngestionDispatcherTests
         var d = h.Build();
         var id = Guid.NewGuid();
 
-        d.IngestRead(Read(id, "302DB42318A0038000001231"));   // received = 1
+        d.IngestReads(Read(id, "302DB42318A0038000001231"));   // received = 1
         var outcome = await d.CompleteAsync(new CompleteCommand(1, id, ExpectedCount: 1));
 
         Assert.True(outcome.Reachability.IsMatch);
@@ -95,7 +96,7 @@ public class IngestionDispatcherTests
         var d = h.Build();
         var id = Guid.NewGuid();
 
-        d.IngestRead(Read(id, "302DB42318A0038000001231"));   // received = 1
+        d.IngestReads(Read(id, "302DB42318A0038000001231"));   // received = 1
         var outcome = await d.CompleteAsync(new CompleteCommand(1, id, ExpectedCount: 2));
 
         Assert.False(outcome.Reachability.IsMatch);
@@ -112,7 +113,7 @@ public class IngestionDispatcherTests
         var d = h.Build();
         var id = Guid.NewGuid();
 
-        d.IngestRead(Read(id, "302DB42318A0038000001231"));
+        d.IngestReads(Read(id, "302DB42318A0038000001231"));
         var outcome = await d.CompleteAsync(new CompleteCommand(1, id, ExpectedCount: 1));
 
         Assert.True(outcome.Reachability.IsMatch);
@@ -129,7 +130,7 @@ public class IngestionDispatcherTests
         var d = h.Build();
         var id = Guid.NewGuid();
 
-        d.IngestRead(Read(id, "302DB42318A0038000001231"));
+        d.IngestReads(Read(id, "302DB42318A0038000001231"));
         await d.CompleteAsync(new CompleteCommand(1, id, ExpectedCount: 1));   // 1回目: 配信
 
         var second = await d.CompleteAsync(new CompleteCommand(1, id, ExpectedCount: 1)); // 重複

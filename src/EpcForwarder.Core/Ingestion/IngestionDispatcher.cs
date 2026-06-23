@@ -16,15 +16,15 @@ public sealed class IngestionDispatcher(
     IDestinationCatalog destinations,
     IClock clock)
 {
-    public void IngestRead(ReadCommand cmd)
+    public void IngestReads(ReadBatchCommand cmd)
     {
-        // 遅延生成: 未知セッションはメッセージのメタデータで作成(既存は触らない)。
+        // 遅延生成: 未知セッションはメッセージのメタデータで作成(既存は触らない)。バッチで1回。
         if (sessions.Get(cmd.SessionId) is null)
         {
             sessions.Save(new Session(cmd.SessionId, cmd.Tenant, cmd.SessionType, cmd.BusinessKey, clock.UtcNow));
         }
 
-        ingestor.Ingest(cmd.SessionId, cmd.Epc, cmd.DeviceId, cmd.ReadAt, cmd.ResolveSku, cmd.Location);
+        ingestor.IngestBatch(cmd.SessionId, cmd.Reads, cmd.DeviceId, cmd.ResolveSku);
     }
 
     /// <summary>
